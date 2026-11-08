@@ -398,6 +398,7 @@ stage.addEventListener("pointerdown", e => { downT = e.target; if(e.target.close
 stage.addEventListener("pointermove", e => {
   if(INK.cur && e.pointerId === INK.pid){ INK.last = [e.clientX, e.clientY]; const p = pt(e), l = INK.cur.at(-1); if(Math.hypot(p[0]-l[0], p[1]-l[1]) >= 3/(base*S.z)){ INK.cur.push(p); inkPaint(); } return; }
   if(V.view === "board" && BD.drag){ boardMove(e); return; }
+  if(V.view === "board" && BD.tool === "throw" && BD.th){ BD.thTo = pt(e); paint(); return; }
   if(!P.has(e.pointerId)) return; const [px,py] = P.get(e.pointerId); P.set(e.pointerId, [e.clientX, e.clientY]);
   if(P.size === 2){ const [a,b] = [...P.values()]; const d = Math.hypot(a[0]-b[0], a[1]-b[1]); if(pinch){ const r = stage.getBoundingClientRect(); zoomAt(d/pinch, (a[0]+b[0])/2 - r.left, (a[1]+b[1])/2 - r.top); } pinch = d; moved = 99; return; }
   moved += Math.abs(e.clientX-px) + Math.abs(e.clientY-py); if(moved > 4){ stage.classList.add("drag"); S.x += e.clientX-px; S.y += e.clientY-py; apply(); }
@@ -764,7 +765,7 @@ const paintList = list => { $("bsvg").setAttribute("viewBox", `0 0 ${D.w} ${D.h}
 function paint(){
   if(V.view !== "board") { $("objs").innerHTML = $("pickg").innerHTML = ""; return; }
   paintList(objs().map(obj).join("") + (BD.drag && BD.drag.ghost ? obj(BD.drag.ghost, -1) : ""));
-  $("pickg").innerHTML = BD.tool === "nade" && !BD.play ? pickLayer() : "";
+  $("pickg").innerHTML = BD.tool === "pick" && !BD.play ? pickLayer() : BD.tool === "throw" && BD.th ? throwGhost() : "";
 }
 
 // pointer: one pointer draws or moves; a second finger, the middle button or a held Space pans and zooms like the map
@@ -782,9 +783,10 @@ function boardDown(e){
   const i = hit(e), o = objs()[i], cap = () => { BD.drag.pid = e.pointerId; BD.drag.last = [e.clientX, e.clientY]; (() => { try { stage.setPointerCapture(e.pointerId); } catch(_){} })(); };
   if(e.button === 2){ if(turnable(o)){ push(); BD.drag = {turn:i}; cap(); } return false; }   // right drag turns a token, as on Gamecoach
   if(e.button !== 0) return false;
-  const pm = BD.tool === "nade" && e.target.closest("#pickg [data-pc],#pickg [data-pi]");
+  const pm = BD.tool === "pick" && e.target.closest("#pickg [data-pc],#pickg [data-pi]");
   if(pm){ BD.drag = {pick: pm.dataset.pi !== undefined ? {pi:+pm.dataset.pi} : {pc:+pm.dataset.pc}}; cap(); return false; }
   const p = pt(e), h = e.target.closest("[data-h]");
+  if(BD.tool === "throw"){ BD.drag = {th: BD.th ? "second" : "first"}; if(!BD.th) BD.th = p; BD.thTo = p; cap(); paint(); return false; }
   if(h){ push(); BD.drag = {turn:+h.dataset.h}; cap(); return false; }
   if(BD.tool === "erase"){ if(i >= 0){ push(); del(i); } BD.drag = {erase:true}; cap(); return false; }
   if(i >= 0 && (BD.tool === "select" || ["tok","foe","c4","dead","nade","ln"].includes(o.t))){
@@ -810,9 +812,8 @@ function boardMove(e){
     else if(o.t === "ln"){ o.tx = r1(d.o.tx+dx); o.ty = r1(d.o.ty+dy); o.lx = r1(d.o.lx+dx); o.ly = r1(d.o.ly+dy); }
     else { o.x = r1(d.o.x+dx); o.y = r1(d.o.y+dy); }
     d.moved = true; paint(); return; }
-  if(d.place){   // with a grenade: a drag from the throw spot to the landing is a throw by hand
-    if(BD.tool === "nade" && Math.hypot(p[0]-d.place[0], p[1]-d.place[1]) > LW()*3){ d.ghost = {t:"ln", k:BD.kind, tx:d.place[0], ty:d.place[1], lx:p[0], ly:p[1]}; paint(); }
-    return; }
+  if(d.th){ BD.thTo = p; paint(); return; }
+  if(d.place) return;
   const g = d.ghost;
   if(g.t === "line" || g.t === "arrow"){ const l = g.p.at(-1); if(Math.hypot(p[0]-l[0], p[1]-l[1]) >= 3/(base*S.z)) g.p.push(p); }
   else if(g.t === "rect"){ g.x = Math.min(p[0], d.from[0]); g.y = Math.min(p[1], d.from[1]); g.w = r1(Math.abs(p[0]-d.from[0])); g.h = r1(Math.abs(p[1]-d.from[1])); }
@@ -821,7 +822,12 @@ function boardMove(e){
 }
 function boardUp(){
   const d = BD.drag; BD.drag = null; if(!d) return;
-  if(d.place){ if(d.ghost) commit({...d.ghost, id:uid()}); else place(d.place); return; }
+  if(d.place){ place(d.place); return; }
+  if(d.th){   // a second click, or a drag from the throw spot, ends the throw
+    const a = BD.th, b = BD.thTo, far = Math.hypot(b[0]-a[0], b[1]-a[1]) > LW()*3;
+    if(d.th === "second" || far){ BD.th = BD.thTo = null; if(far) commit({t:"ln", k:BD.kind, id:uid(), tx:a[0], ty:a[1], lx:b[0], ly:b[1]}); else paint(); }
+    else paint();
+    return; }
   if(d.pick){ pickAt(d.pick); return; }
   if(BD.remote) setTimeout(applyRemote, 0);
   if(d.move !== undefined){ if(!d.moved) BD.undo.pop(); saveBoard(); paint(); boardBars(); return; }
@@ -838,7 +844,7 @@ function place(p){
   if(t === "tok"){ const n = Math.min(BD.color, 4)+1, o = list.find(o => o.t === "tok" && o.n === n); push(); if(o){ o.x = x; o.y = y; } else list.push({t:"tok", n, c:COLORS[n-1], x, y}); saveBoard(); paint(); boardBars(); return; }
   if(t === "c4"){ const o = list.find(o => o.t === "c4"); push(); if(o){ o.x = x; o.y = y; } else list.push({t:"c4", id:"c4", x, y}); saveBoard(); paint(); boardBars(); return; }
   if(t === "foe" || t === "dead") commit({t, id:uid(), x, y});
-  else if(t === "nade") commit({t:"nade", k:BD.kind, id:uid(), x, y});
+  else if(t === "fx") commit({t:"nade", k:BD.kind, id:uid(), x, y});
 }
 function textAt(p, i = -1){
   const r = stage.getBoundingClientRect(), k = base*S.z, inp = document.createElement("input");
@@ -955,7 +961,7 @@ function picker(){
   if(BD.naming) return `<input id="bname" class="bname" maxlength="40" placeholder="Название доски" value="${BD.naming === "rename" && cur ? esc(cur.name) : ""}">` + bb("nameok", "Готово (Enter)", "check") + bb("namecancel", "Отмена (Esc)", "x");
   const opts = [["", "Черновик"], ...(BD.doc && !cur ? [[BD.doc, "…"]] : []), ...BD.list.map(b => [b.id, b.name])];
   return `<select id="bsel" class="bsel" title="Доска: черновик в этом браузере или общая">${opts.map(([v, l]) => `<option value="${v}"${v === BD.doc ? " selected" : ""}>${esc(l)}</option>`).join("")}<option value="+">＋ Новая доска</option></select>` +
-    (BD.doc ? bb("rename", "Переименовать", "pencil") + `<button type="button" class="ib${BD.sureDel ? " danger" : ""}" data-act="delb" title="${BD.sureDel ? "Точно удалить у всех?" : "Удалить доску"}">${icon("trash-2")}</button>` : "");
+    (BD.doc ? bb("rename", "Переименовать", "pencil") + `<button type="button" class="ib${BD.sureDel ? " danger" : ""}" data-act="delb" title="${BD.sureDel ? "Точно удалить у всех?" : "Удалить доску"}">${icon("file-x")}</button>` : "");
 }
 $("bacts").addEventListener("change", e => {
   if(e.target.id !== "bsel") return; const v = e.target.value;
@@ -970,7 +976,7 @@ function boardBars(){
   if(V.view !== "board") return;
   $("bacts").innerHTML = picker() + (BD.shared ? bb("keep", "Оставить эту доску себе", "bookmark-plus") + bb("own", "Закрыть и вернуться к своей доске", "x") : "") +
     bb("undo", "Отменить (Ctrl+Z)", "undo-2", !BD.undo.length) + bb("redo", "Вернуть (Ctrl+Y)", "redo-2", !BD.redo.length) +
-    `<button type="button" class="ib${BD.sure ? " danger" : ""}" data-act="clear" title="${BD.sure ? "Нажмите ещё раз: шаг очистится" : "Очистить шаг"}" aria-label="Очистить шаг">${icon("brush")}</button>` + bb("png", "Скачать картинку шага", "image-down") + bb("link", "Скопировать ссылку на доску", "link") + (document.fullscreenEnabled ? bb("full", "Во весь экран", "maximize") : "");
+    `<button type="button" class="ib${BD.sure ? " danger" : ""}" data-act="clear" title="${BD.sure ? "Нажмите ещё раз: шаг очистится" : "Очистить шаг"}" aria-label="Очистить шаг">${icon("trash-2")}</button>` + bb("png", "Скачать картинку шага", "image-down") + bb("link", "Скопировать ссылку на доску", "link") + (document.fullscreenEnabled ? bb("full", "Во весь экран", "maximize") : "");
   $("bsteps").innerHTML = bb("prev", "Предыдущий шаг (←)", "chevron-left", BD.cur === 0) +
     BD.steps.map((s, k) => `<button type="button" class="seg" data-step="${k}" aria-pressed="${k === BD.cur}" title="Шаг ${k+1}">${k+1}</button>`).join("") +
     bb("next", "Следующий шаг (→)", "chevron-right", BD.cur === BD.steps.length-1) + bb("add", "Новый шаг: игроки, противники и бомба переносятся", "plus") +
@@ -980,7 +986,7 @@ function boardBars(){
 function boardUI(){
   if(V.view !== "board") return;
   stage.dataset.tool = BD.tool;
-  const n = Math.min(BD.color, 4)+1, on = id => id.startsWith("nade:") ? BD.tool === "nade" && BD.kind === id.slice(5) : BD.tool === id;
+  const n = Math.min(BD.color, 4)+1, on = id => BD.tool === id;
   const t = (id, label, inner) => `<button type="button" class="ib" data-tool="${id}" aria-pressed="${on(id)}" title="${label}" aria-label="${label}">${inner}</button>`;
   $("btools").innerHTML = [
     t("select", "Выбрать и двигать (S); тяните кружок у игрока, чтобы показать, куда он смотрит", icon("mouse-pointer-2")),
@@ -990,7 +996,9 @@ function boardUI(){
     t("tok", `Игрок ${n} (E); номер — по цвету`, `<span class="sw" style="--c:${COLORS[n-1]}">${n}</span>`),
     t("foe", "Противник", `<span class="sw" style="--c:#0b0e10;border-color:#ff5148;box-shadow:inset 0 0 0 5px #0b0e10,inset 0 0 0 9px #ff5148"></span>`),
     t("c4", "Бомба", `<img src="${NI.c4}" alt="">`), t("dead", "Убит", icon("skull")),
-    t("nade", `${KIND[BD.kind]}: точка на карте — раскидка, клик — эффект, протянуть — бросок с руки`, kicon(BD.kind)), "<hr>",
+    t("pick", `Раскидки: ${KIND[BD.kind]}`, `<i data-lucide="target" style="color:${KC[BD.kind]}"></i>`),
+    t("throw", `С руки: ${KIND[BD.kind]}, откуда и куда`, `<i data-lucide="hand" style="color:${KC[BD.kind]}"></i>`),
+    t("fx", `Эффект: ${KIND[BD.kind]}, клик по карте`, kicon(BD.kind)), "<hr>",
     ...COLORS.map((c, i) => `<button type="button" class="ib" data-color="${i}" aria-pressed="${BD.color === i}" title="${i < 5 ? `Игрок ${i+1}, цвет (клавиша ${i+1})` : "Белый (клавиша 6)"}"><span class="sw" style="--c:${c}"></span></button>`)
   ].join("");
   boardBars(); paint(); draw();
@@ -999,7 +1007,7 @@ function toast(t){
   let el = $("toast"); if(!el){ el = document.createElement("div"); el.id = "toast"; el.className = "toast"; stage.append(el); }
   el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2500);
 }
-function setTool(v){ BD.pk = {open:-1, hot:-1}; if(v.startsWith("nade:")){ BD.tool = "nade"; BD.kind = v.slice(5); } else BD.tool = v; if(v !== "select") BD.sel = -1; BD.sure = false; boardUI(); }
+function setTool(v){ BD.pk = {open:-1, hot:-1}; BD.th = BD.thTo = null; const [tool, kind] = v.split(":"); if(kind) BD.kind = kind; BD.tool = tool; if(v !== "select") BD.sel = -1; BD.sure = false; boardUI(); }
 function setColor(i){
   BD.color = i; BD.sure = false;
   const o = objs()[BD.sel];
@@ -1029,7 +1037,9 @@ function pickLayer(){
       lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round"/><line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/>`;
       dots += `<g data-pi="${i}"><circle cx="${tx}" cy="${ty}" r="${w*2.6}" fill="transparent"/><circle cx="${tx}" cy="${ty}" r="${w*1.7}" fill="${isOn(i) ? c : "#0b0e10"}" stroke="${isOn(i) ? "#0b0e10" : c}" stroke-width="${w*.6}"/>${tip(i)}</g>`; });
     const n = g.m.length, ring = fav(g.m) ? "#f0b443" : c, picked = g.m.some(isOn);
-    dots += `<g data-pc="${ci}"><circle cx="${x}" cy="${y}" r="${r*1.7}" fill="transparent"/><circle cx="${x}" cy="${y}" r="${r}" fill="${picked ? c : "#0b0e10"}" stroke="${picked ? "#0b0e10" : ring}" stroke-width="${w*(open ? .9 : .6)}"/>${kglyph(BD.kind, x, y, r*1.15, picked ? "#0b0e10" : c)}` +
+    dots += `<g data-pc="${ci}"><circle cx="${x}" cy="${y}" r="${r*1.7}" fill="transparent"/>` + (picked
+      ? `<circle cx="${x}" cy="${y}" r="${r}" fill="transparent" stroke="${ring}" stroke-width="${w*.45}" stroke-dasharray="${w*.9} ${w*.6}"/>`
+      : `<circle cx="${x}" cy="${y}" r="${r}" fill="#0b0e10" stroke="${ring}" stroke-width="${w*(open ? .9 : .6)}"/>${kglyph(BD.kind, x, y, r*1.15, c)}`) +
       (n === 1 ? tip(g.m[0]) : `<title>${esc(D.items[g.m[0]].to)}</title>`) + `</g>`;
     if(n > 1) tops += `<g data-pc="${ci}"><circle cx="${x+r*.85}" cy="${y-r*.85}" r="${w*1.9}" fill="#f0b443" stroke="#0b0e10" stroke-width="${w*.4}"/><text x="${x+r*.85}" y="${y-r*.85}" dy=".35em" text-anchor="middle" font-size="${w*2.5}" font-weight="700" font-family="Golos Text,sans-serif" fill="#1a1205">${n}</text></g>`;
   });
@@ -1047,24 +1057,32 @@ function pickAt(m){
   BD.pk.open = BD.pk.open === m.pc ? -1 : m.pc; paint();
 }
 stage.addEventListener("pointerover", e => {
-  if(V.view !== "board" || BD.tool !== "nade" || e.pointerType === "touch") return;
+  if(V.view !== "board" || BD.tool !== "pick" || e.pointerType === "touch") return;
   const g = e.target.closest && e.target.closest("#pickg [data-pc]"), h = g ? +g.dataset.pc : e.target.closest && e.target.closest("#pickg [data-pi]") ? BD.pk.hot : -1;
   if(h !== BD.pk.hot){ BD.pk.hot = h; paint(); }
 });
 $("btools").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return;
-  if(b.dataset.tool === "nade"){ kindPick(b); return; }
+  if(["pick", "throw", "fx"].includes(b.dataset.tool)){ kindPick(b, b.dataset.tool); return; }
   kindClose(); if(b.dataset.tool) setTool(b.dataset.tool); if(b.dataset.color) setColor(+b.dataset.color); });
 // the grenade kinds, beside the grenade button (above it on phones)
-function kindPick(btn){
-  const el = $("kpick"); if(!el.hidden){ kindClose(); return; }
-  el.innerHTML = Object.keys(KIND).map(k => `<button type="button" class="ib" data-kind="${k}" aria-pressed="${BD.tool === "nade" && BD.kind === k}" title="${KIND[k]}" aria-label="${KIND[k]}">${kicon(k)}</button>`).join("");
+function kindPick(btn, mode){
+  const el = $("kpick"); if(!el.hidden && el.dataset.mode === mode){ kindClose(); return; }
+  el.dataset.mode = mode;
+  el.innerHTML = Object.keys(KIND).map(k => `<button type="button" class="ib" data-kind="${k}" aria-pressed="${BD.tool === mode && BD.kind === k}" title="${KIND[k]}" aria-label="${KIND[k]}">${kicon(k)}</button>`).join("");
   el.hidden = false; draw();
   const r = btn.getBoundingClientRect(), s = stage.getBoundingClientRect();
   if(innerWidth <= 760){ el.style.left = `${Math.max(8, Math.min(r.left - s.left - 40, s.width - el.offsetWidth - 8))}px`; el.style.top = `${$("btools").getBoundingClientRect().top - s.top - el.offsetHeight - 6}px`; }
   else { el.style.left = `${r.right - s.left + 10}px`; el.style.top = `${r.top - s.top - 3}px`; }
 }
 function kindClose(){ $("kpick").hidden = true; }
-$("kpick").addEventListener("click", e => { const b = e.target.closest("[data-kind]"); if(!b) return; kindClose(); setTool("nade:" + b.dataset.kind); });
+$("kpick").addEventListener("click", e => { const b = e.target.closest("[data-kind]"); if(!b) return; const mode = $("kpick").dataset.mode; kindClose(); setTool(mode + ":" + b.dataset.kind);
+  if(mode === "throw") toast("Откуда кидают, затем куда падает"); });
+// a throw by hand while it is being marked: the spot, then the flight to the pointer
+function throwGhost(){
+  const [x, y] = BD.th, w = LW(), c = KC[BD.kind];
+  return BD.thTo && Math.hypot(BD.thTo[0]-x, BD.thTo[1]-y) > w*3 ? obj({t:"ln", k:BD.kind, tx:x, ty:y, lx:BD.thTo[0], ly:BD.thTo[1]}, -1)
+    : `<circle cx="${x}" cy="${y}" r="${w*1.5}" fill="${c}" stroke="#0b0e10" stroke-width="${w*.6}"/>`;
+}
 const ACT = {nameok:nameDone, namecancel:() => { BD.naming = ""; boardBars(); },
   rename:() => { BD.naming = "rename"; boardBars(); setTimeout(() => $("bname") && $("bname").select(), 0); },
   delb:() => { if(!BD.sureDel){ BD.sureDel = true; boardBars(); toast("Ещё раз — и доска удалится у всех"); return; } const id = BD.doc; closeDoc(); FB.db.doc("boards/" + id).delete().catch(() => toast("Не удалилась")); loadBoard(); history.replaceState(null, "", hashOf()); boardUI(); },
@@ -1081,7 +1099,7 @@ addEventListener("keydown", e => {
   if((e.ctrlKey || e.metaKey) && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
   if(e.ctrlKey || e.metaKey || e.altKey) return;
   if((e.key === "Delete" || e.key === "Backspace") && BD.sel >= 0){ push(); del(BD.sel); return; }
-  if(e.key === "Escape"){ kindClose(); if(BD.tool === "nade") setTool("select"); else { BD.sel = -1; paint(); } return; }
+  if(e.key === "Escape"){ kindClose(); if(BD.th){ BD.th = BD.thTo = null; paint(); } else if(["pick", "throw", "fx"].includes(BD.tool)) setTool("select"); else { BD.sel = -1; paint(); } return; }
   if(e.key === "ArrowLeft"){ goStep(BD.cur-1); return; }
   if(e.key === "ArrowRight"){ goStep(BD.cur+1); return; }
   const n = "123456".indexOf(e.key); if(n >= 0){ setColor(n); return; }
