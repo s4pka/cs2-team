@@ -13,6 +13,7 @@
   color-scheme:dark;
 }
 html,body{height:100%}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -219,18 +220,22 @@ function placeCards(sel){
   cards.innerHTML = ""; if(!sel || innerWidth <= 760) return;
   const r = stage.getBoundingClientRect(), [ax,ay] = scr(sel.t), [bx,by] = scr(sel.l);
   const W = Math.min(400, r.width*0.34), w2 = W*0.62, h1 = W*9/16, h2 = w2*9/16, gap = 8, M = 12, top = 60;
-  const dx = bx-ax, dy = by-ay;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  // throw group: aim on top, stand under it
-  const gw = W, gh = h1 + gap + h2;
-  let gx = dx > 0 ? ax - 34 - gw : ax + 34, gy = ay - gh/2;
-  if(gx < M || gx + gw > r.width - M) gx = dx > 0 ? ax + 34 : ax - 34 - gw;
-  gx = clamp(gx, M, r.width - M - gw); gy = clamp(gy, top, r.height - M - gh);
-  const lw = w2, lh = h2;
-  let lx = dx > 0 ? bx + 34 : bx - 34 - lw, ly = by - lh/2;
-  if(lx < M || lx + lw > r.width - M) lx = dx > 0 ? bx - 34 - lw : bx + 34;
-  lx = clamp(lx, M, r.width - M - lw); ly = clamp(ly, top, r.height - M - lh);
-  if(lx < gx + gw + 8 && lx + lw > gx - 8 && ly < gy + gh + 8 && ly + lh > gy - 8) ly = (gy + gh/2 > by) ? clamp(gy - lh - 12, top, r.height-M-lh) : clamp(gy + gh + 12, top, r.height-M-lh);
+  const hitSeg = (x, y, w, h) => { for(let i = 0; i <= 60; i++){ const px = ax + (bx-ax)*i/60, py = ay + (by-ay)*i/60; if(px > x-10 && px < x+w+10 && py > y-10 && py < y+h+10) return true; } return false; };
+  const over = (a, b2) => a && Math.max(0, Math.min(a.x+a.w, b2.x+b2.w) - Math.max(a.x, b2.x) + 10) * Math.max(0, Math.min(a.y+a.h, b2.y+b2.h) - Math.max(a.y, b2.y) + 10);
+  // try eight spots around the point; skip ones that cover the flight line, a point or the other card
+  function place(w, h, px, py, other){
+    const g = 30, C = [[px+g, py-h/2], [px-g-w, py-h/2], [px-w/2, py-g-h], [px-w/2, py+g], [px+g, py-g-h], [px-g-w, py-g-h], [px+g, py+g], [px-g-w, py+g]];
+    let best = null;
+    for(const [cx, cy] of C){
+      const x = clamp(cx, M, r.width-M-w), y = clamp(cy, top, r.height-M-h), R = {x, y, w, h};
+      const s = (hitSeg(x, y, w, h) ? 1e6 : 0) + (other ? over(R, other) * 10 : 0) + Math.abs(x-cx) + Math.abs(y-cy);
+      if(!best || s < best.s) best = {...R, s};
+    }
+    return best;
+  }
+  const gw = W, gh = h1 + gap + h2, G = place(gw, gh, ax, ay, null), L = place(w2, h2, bx, by, G);
+  const gx = G.x, gy = G.y, lx = L.x, ly = L.y, lw = w2, lh = h2;
   const k = sel.k, card = (cls, x, y, w, h, src, lab, extra="") => `<div class="card ${cls}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px" data-src="${src}"><img src="${src}" alt="${lab}"><span class="lab">${lab}</span>${extra}</div>`;
   const vid = !S.video ? "" : sel.k === "smoke-window-insta-from-t-spawn-6" ? `<video class="vid" style="padding:0;width:100%;height:100%;object-fit:contain" src="https://assets.nades.ai/lineups/6a9f361f5473d2c665aecea6/video-720p/9de859b8cd95a2a099fd1095b94b36ca689ea7c31907c42918389c16a6e5fb81.mp4" controls autoplay muted playsinline></video>` : `<div class="vid">В макете видео есть только у смока в окно с Т спавна, точка 6.</div>`;
   cards.innerHTML =
