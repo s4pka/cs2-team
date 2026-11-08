@@ -100,6 +100,8 @@ a.btn{color:var(--fg);text-decoration:none}
   .bar2 #bacts{max-width:none;overflow:visible}
   .side{border-left:0;border-top:1px solid var(--line);max-height:46vh;padding:14px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
   .card{display:none}
+  .app[data-view=board] .card{display:block}
+  .app[data-view=board] .card.howc{display:grid}
   .photos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .photos figure{margin:0;position:relative;border-radius:8px;overflow:hidden}
   .photos figure:first-child{grid-column:1/-1}
@@ -171,7 +173,7 @@ img,svg image{-webkit-user-drag:none}
 #objs .bsel{filter:drop-shadow(0 0 2px #f0b443) drop-shadow(0 0 4px #f0b443)}
 .ib:disabled{opacity:.35;cursor:default}
 .app[data-view=board] .bonly{display:flex!important}
-.app[data-view=board] #sides,.app[data-view=board] #kinds,.app[data-view=board] #marks,.app[data-view=board] #links,.app[data-view=board] #cards{display:none}
+.app[data-view=board] #sides,.app[data-view=board] #kinds,.app[data-view=board] #marks{display:none}
 @media (min-width:761px){.app[data-view=board]{grid-template-columns:56px 1fr}}
 .app[data-view=board] .side{display:none}
 .app[data-view=board] .stage{cursor:crosshair}
@@ -382,7 +384,7 @@ function apply(){
   // keep at least 120 px of the map on screen, so a drag never throws it away
   const r = stage.getBoundingClientRect(), W = D.w*base*S.z, H = D.h*base*S.z, k = 120;
   if(r.width){ S.x = Math.min(r.width - k, Math.max(k - W, S.x)); S.y = Math.min(r.height - k, Math.max(k - H, S.y)); }
-  world.style.width = D.w*base+"px"; world.style.height = D.h*base+"px"; world.style.transform = `translate(${S.x}px,${S.y}px) scale(${S.z})`; if(V.view === "map") render(); }
+  world.style.width = D.w*base+"px"; world.style.height = D.h*base+"px"; world.style.transform = `translate(${S.x}px,${S.y}px) scale(${S.z})`; if(V.view === "map") render(); else if(V.view === "board" && BD.info) infoCards(); }
 const scr = ([x,y]) => [S.x + x*base*S.z, S.y + y*base*S.z];
 function zoomAt(f, cx, cy){ const z = Math.min(6, Math.max(1, S.z*f)); f = z/S.z; S.x = cx - (cx - S.x)*f; S.y = cy - (cy - S.y)*f; S.z = z; apply(); }
 stage.addEventListener("wheel", e => { e.preventDefault(); const r = stage.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1/1.15, e.clientX - r.left, e.clientY - r.top); }, {passive:false});
@@ -406,7 +408,7 @@ stage.addEventListener("pointermove", e => {
 const end = e => { P.delete(e.pointerId); pinch = 0; stage.classList.remove("drag"); };
 stage.addEventListener("pointerup", e => {
   if(INK.cur && e.pointerId === INK.pid){ if(INK.cur.length > 1) INK.lines.push(simplify(INK.cur, D.w/660)); INK.cur = null; inkPaint(); return; }
-  if(V.view === "board"){ if(BD.drag) boardUp(); else if(moved <= 4 && BD.tool === "select" && !e.target.closest("[data-i],.bar,.zoom,.btools,.bsteps")) { BD.sel = -1; paint(); } end(e); return; }
+  if(V.view === "board"){ if(BD.drag) boardUp(); else if(moved <= 4 && BD.tool === "select" && !e.target.closest("[data-i],.bar,.zoom,.btools,.bsteps,.card")) { BD.sel = -1; BD.info = null; paint(); } end(e); return; }
   const wasDrag = moved > 4; end(e); if(wasDrag) return; const t = downT && downT.closest("[data-i],[data-c]"); if(t) pick(t); else if(!(downT && downT.closest(".bar,.zoom,.card"))){ S.sel = S.open = null; S.video = false; render(); } });
 stage.addEventListener("pointercancel", e => { if(BD.drag){ BD.drag = null; paint(); } end(e); });
 $("zin").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.4, r.width/2, r.height/2); };
@@ -418,18 +420,10 @@ addEventListener("keydown", e => { if(e.key === "Escape" && V.view === "map"){ S
 // data views
 const shown = () => D.items.map((it,i) => ({...it, i})).filter(it => (S.side === "all" || it.side === S.side) && S.kinds.has(it.kind) && (!S.only || FAV.ids.has(it.slug)));
 function clusters(list){ const out = []; for(const it of list){ const c = out.find(c => Math.hypot(c.t[0]-it.t[0], c.t[1]-it.t[1]) < 9); if(c) c.m.push(it); else out.push({t:it.t, m:[it]}); } return out; }
-function focusSel(){
-  if(innerWidth > 760 || S.sel === null) return;
-  const it = D.items[S.sel], r = stage.getBoundingClientRect(), top = stage.querySelector(".bar").getBoundingClientRect().bottom - r.top + 12, pad = 48;
-  const x0 = Math.min(it.t[0], it.l[0]), x1 = Math.max(it.t[0], it.l[0]), y0 = Math.min(it.t[1], it.l[1]), y1 = Math.max(it.t[1], it.l[1]);
-  const fitz = Math.min((r.width - 2*pad)/Math.max(x1 - x0, 1), (r.height - top - 2*pad)/Math.max(y1 - y0, 1))/base;
-  S.z = Math.min(4, Math.max(1, fitz)); const k = base*S.z;
-  S.x = r.width/2 - (x0 + x1)/2*k; S.y = top + (r.height - top)/2 - (y0 + y1)/2*k; apply();
-}
 function pick(el){
   if(el.dataset.c !== undefined){ const c = +el.dataset.c; S.open = S.open === c ? null : c; S.sel = null; S.video = false; }
   else { S.sel = +el.dataset.i; S.video = false; }
-  render(); requestAnimationFrame(focusSel);
+  render();
 }
 function marker(it, x, y, dim, on){
   const c = col(it.kind), r = on ? 15 : 12;
@@ -468,9 +462,10 @@ function render(){
 
 // photo cards beside the throw spot and the landing spot, on the side away from the flight line
 function placeCards(sel){
-  cards.innerHTML = ""; if(!sel || innerWidth <= 760) return;
-  const r = stage.getBoundingClientRect(), [ax,ay] = scr(sel.t), [bx,by] = scr(sel.l);
-  const W = Math.min(400, r.width*0.34), w2 = W*0.62, h1 = W*9/16, h2 = w2*9/16, gap = 8, M = 12, top = 60;
+  cards.innerHTML = ""; cards.sel = sel; if(!sel || innerWidth <= 760 && V.view !== "board") return;
+  const r = stage.getBoundingClientRect(), [ax,ay] = scr(sel.t), [bx,by] = scr(sel.l), phone = innerWidth <= 760;
+  const W = phone ? r.width*0.62 : Math.min(400, r.width*0.34), w2 = W*0.62, h1 = W*9/16, h2 = w2*9/16, gap = 8, M = V.view === "board" && !phone ? 64 : 12;
+  const top = stage.querySelector(".bar").getBoundingClientRect().bottom - r.top + 8;
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const hitSeg = (x, y, w, h) => { for(let i = 0; i <= 60; i++){ const px = ax + (bx-ax)*i/60, py = ay + (by-ay)*i/60; if(px > x-10 && px < x+w+10 && py > y-10 && py < y+h+10) return true; } return false; };
   const over = (a, b2) => a && Math.max(0, Math.min(a.x+a.w, b2.x+b2.w) - Math.max(a.x, b2.x) + 10) * Math.max(0, Math.min(a.y+a.h, b2.y+b2.h) - Math.max(a.y, b2.y) + 10);
@@ -502,10 +497,10 @@ function placeCards(sel){
   draw();
 }
 cards.addEventListener("click", e => {
-  if(e.target.closest("[data-play]")){ S.video = !S.video; render(); return; }
+  if(e.target.closest("[data-play]")){ S.video = !S.video; if(V.view === "board"){ cards.key = ""; infoCards(); } else render(); return; }
   const c = e.target.closest(".card"); if(!c || c.classList.contains("howc") || S.video && c.classList.contains("aim")) return;
   // the aim frame opens as itself; the stand and land frames open as the tall picture with both
-  const sel = D.items[S.sel], f = +c.dataset.f;
+  const sel = cards.sel, f = +c.dataset.f;
   const lb = document.createElement("div"); lb.className = "lb";
   lb.innerHTML = f === 1 ? `<span class="fr s1" style="background-image:url('shots/${D.key}/${sel.k}.webp')"></span>` : `<img src="shots/${D.key}/${sel.k}_big.webp" alt="">`;
   lb.onclick = () => lb.remove(); document.body.append(lb);
@@ -529,7 +524,7 @@ function panel(sel, list){
   }
   draw();
 }
-side.addEventListener("click", e => { const b = e.target.closest(".row"); if(b){ S.sel = +b.dataset.i; S.open = null; S.video = false; render(); requestAnimationFrame(focusSel); } });
+side.addEventListener("click", e => { const b = e.target.closest(".row"); if(b){ S.sel = +b.dataset.i; S.open = null; S.video = false; render(); } });
 side.addEventListener("pointerover", e => { const b = e.target.closest(".row"); marks.querySelectorAll("[data-i]").forEach(g => g.style.filter = b && g.dataset.i === b.dataset.i ? "drop-shadow(0 0 6px #f0b443)" : ""); });
 
 // no picture drag, no long-press menu on the map; a right click on the map does nothing
@@ -567,7 +562,7 @@ function show(v, k){
   history.replaceState(null, "", hashOf());
   document.title = (v === "cfg" ? "Конфиги" : `${VIEWS[v]} · ${DATA.maps[S.map].name}`) + " · S4";
   if(v === "map"){ fit(); render(); return; }
-  if(v === "board"){ boardUI(); fit(); return; }
+  if(v === "board"){ links.innerHTML = ""; cards.innerHTML = ""; cards.key = ""; boardUI(); fit(); return; }
   paintPage(); page.scrollTop = 0;
 }
 $("rail").onclick = e => { const b = e.target.closest("[data-view]"); if(b) show(b.dataset.view, S.map); };
@@ -665,7 +660,7 @@ function fromOld(o, f){
 }
 function loadBoard(){
   closeDoc(); listBoards();
-  BD.shared = ""; BD.undo = []; BD.redo = []; BD.sure = false; BD.sel = -1; BD.cur = 0; BD.drag = null;
+  BD.shared = ""; BD.undo = []; BD.redo = []; BD.sure = false; BD.sel = -1; BD.cur = 0; BD.drag = null; BD.info = null;
   let b = store(s => JSON.parse(s.getItem(BKEY()) || "null"), null);
   if(!b){ const old = store(s => JSON.parse(s.getItem("cs2board:" + S.map) || "null"), null);
     b = {steps:[{o: Array.isArray(old) && D.fit ? old.map(o => fromOld(o, D.fit)).filter(Boolean) : [], note:""}]}; }
@@ -714,9 +709,10 @@ function obj(o, i){
   if(o.t === "nade") return `<g ${k}>${blast(o.k, o.x, o.y, o.id)}</g>`;
   if(o.t === "ln"){   // a lineup from the grenade map: throw spot, flight, and what it covers
     const ang = Math.atan2(o.ly-o.ty, o.lx-o.tx), c = NC[o.k];
-    return `<g ${k}><line x1="${o.tx}" y1="${o.ty}" x2="${o.lx}" y2="${o.ly}" stroke="#000a" stroke-width="${w*1.6}" stroke-linecap="round"/><line x1="${o.tx}" y1="${o.ty}" x2="${o.lx}" y2="${o.ly}" stroke="${c}" stroke-width="${w*.9}" stroke-dasharray="${w*.2} ${w*2}" stroke-linecap="round"/>
-      <circle cx="${o.tx}" cy="${o.ty}" r="${w*1.5}" fill="${c}" stroke="#0b0e10" stroke-width="${w*.6}"/>
-      ${blast(o.k, o.lx, o.ly, o.id)}</g>`;
+    const rt = w*2.4, open = o.ref && o.id === BD.info;
+    return `<g ${k}><g opacity=".5"><line x1="${o.tx}" y1="${o.ty}" x2="${o.lx}" y2="${o.ly}" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round"/><line x1="${o.tx}" y1="${o.ty}" x2="${o.lx}" y2="${o.ly}" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/></g>
+      ${blast(o.k, o.lx, o.ly, o.id)}
+      <g${o.ref ? ` data-ts="1" style="cursor:pointer"` : ""}><circle cx="${o.tx}" cy="${o.ty}" r="${rt}" fill="#0e1216" stroke="${open ? "#f0b443" : c}" stroke-width="${w*(open ? .8 : .5)}"/>${kglyph(o.k, o.tx, o.ty, rt*1.15, c)}</g></g>`;
   }
   return "";
 }
@@ -739,31 +735,46 @@ function blast(kind, x, y, seed){
     // a cloud of overlapping puffs, about the smoke's radius across, blurred at the edge
     const R = BLAST.smoke*u; let puffs = `<circle cx="${x}" cy="${y}" r="${r1(R*.62)}"/>`;
     for(let i = 0; i < 8; i++){ const [px, py] = P(R*(.38 + rnd()*.08), i/8*Math.PI*2 + rnd()*.4); puffs += `<circle cx="${px}" cy="${py}" r="${r1(R*(.5 + rnd()*.1))}"/>`; }
-    return `<g opacity=".9"><g fill="#c9d0d6" filter="url(#f-soft)">${puffs}</g><circle cx="${x}" cy="${y}" r="${r1(R*.55)}" fill="#f2f4f6" opacity=".7" filter="url(#f-glow)"/></g>`;
+    return `<g opacity=".78"><g fill="#c9d0d6" filter="url(#f-soft)">${puffs}</g><circle cx="${x}" cy="${y}" r="${r1(R*.55)}" fill="#f2f4f6" opacity=".7" filter="url(#f-glow)"/></g>`;
   }
   if(kind === "molotov"){
     // a ragged patch of fire cells about 48 units apart (memorin.app) inside the measured radius, with a glow under it
     const R = BLAST.molotov*u, cell = 48*u; let cells = `<circle cx="${x}" cy="${y}" r="${r1(R*.5)}"/>`;
     for(let i = 0; i < 10; i++){ const [px, py] = P(R*(.42 + rnd()*.32), i/10*Math.PI*2 + rnd()*.5); cells += `<circle cx="${px}" cy="${py}" r="${r1(cell*(.55 + rnd()*.35))}"/>`; }
-    return `<g fill="#ff5a1f" opacity=".55" filter="url(#f-glow)">${cells}</g><g fill="url(#g-fire)" filter="url(#f-soft)">${cells}</g>`;
+    return `<g fill="#ff5a1f" opacity=".4" filter="url(#f-glow)">${cells}</g><g fill="url(#g-fire)" opacity=".88" filter="url(#f-soft)">${cells}</g>`;
   }
   if(kind === "flash"){
-    // no area: it blinds whoever sees it, so a bright burst with rays
-    const r = w*8; let rays = "";
-    for(let i = 0; i < 12; i++){ const a = i*Math.PI/6, [ax, ay] = P(r*.35, a), [bx, by] = P(r*(i % 2 ? .8 : 1.15), a); rays += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}"/>`; }
-    return `<circle cx="${x}" cy="${y}" r="${r*1.4}" fill="url(#g-flash)" opacity=".85"/><g stroke="#fff7c2" stroke-width="${w*.55}" stroke-linecap="round">${rays}</g><circle cx="${x}" cy="${y}" r="${r*.32}" fill="#fff"/>`;
+    // no area: it blinds whoever sees it, so a small bright burst with short rays
+    const r = w*3.6; let rays = "";
+    for(let i = 0; i < 8; i++){ const a = i*Math.PI/4 + Math.PI/8, [ax, ay] = P(r*.45, a), [bx, by] = P(r*(i % 2 ? .85 : 1.1), a); rays += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}"/>`; }
+    return `<circle cx="${x}" cy="${y}" r="${r*1.2}" fill="url(#g-flash)" opacity=".65"/><g stroke="#fff7c2" stroke-width="${w*.5}" stroke-linecap="round">${rays}</g><circle cx="${x}" cy="${y}" r="${r*.3}" fill="#fff"/>`;
   }
   if(kind === "he"){
-    // the damage radius, fading to the edge, and a fireball at the centre
-    const R = BLAST.he*u, r = w*4.5;
-    return `<circle cx="${x}" cy="${y}" r="${R}" fill="url(#g-he)" stroke="#74d47a" stroke-opacity=".55" stroke-width="${w*.35}" stroke-dasharray="${w*1.2} ${w*1.2}"/><circle cx="${x}" cy="${y}" r="${r*1.5}" fill="#ff7a1f" opacity=".55" filter="url(#f-glow)"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#g-boom)" filter="url(#f-soft)"/>`;
+    // a compact explosion: a hot core and two shock rings
+    const r = w*2.6;
+    return `<circle cx="${x}" cy="${y}" r="${r*2.6}" fill="none" stroke="#ffb02e" stroke-opacity=".35" stroke-width="${w*.45}"/><circle cx="${x}" cy="${y}" r="${r*1.8}" fill="none" stroke="#ff8a2a" stroke-opacity=".7" stroke-width="${w*.6}"/><circle cx="${x}" cy="${y}" r="${r*1.25}" fill="#ff7a1f" opacity=".5" filter="url(#f-glow)"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#g-boom)" stroke="#0b0e10" stroke-width="${w*.35}"/>`;
   }
   return "";
 }
 function handle(o, i, w){ const a = (o.a ?? -90)*Math.PI/180, R = w*8; return `<line x1="0" y1="0" x2="${r1(R*Math.cos(a))}" y2="${r1(R*Math.sin(a))}" stroke="#f0b443" stroke-width="${w*.4}" stroke-dasharray="${w} ${w}" pointer-events="none"/><circle data-h="${i}" cx="${r1(R*Math.cos(a))}" cy="${r1(R*Math.sin(a))}" r="${w*1.8}" fill="#f0b443" stroke="#0b0e10" stroke-width="${w*.5}" style="cursor:grab"/>`; }
 const paintList = list => { $("bsvg").setAttribute("viewBox", `0 0 ${D.w} ${D.h}`); if(!$("bdefs").innerHTML) $("bdefs").innerHTML = BDEFS; $("objs").innerHTML = list; };
+// the photos of the lineup whose throw spot was clicked (BD.info is its id); rebuilt only when something they show changes
+BD.info = null;
+function boardInfo(){
+  const o = BD.info && objs().find(o => o.id === BD.info && o.t === "ln" && o.ref), it = o && D.items.find(it => it.k === o.ref);
+  return it ? {...it, t:[o.tx, o.ty], l:[o.lx, o.ly]} : null;
+}
+function infoCards(){
+  if(V.view !== "board") return;
+  const s = boardInfo(); if(!s) BD.info = null;
+  const key = s ? JSON.stringify([s.k, s.t, s.l, S.video, S.x, S.y, S.z]) : "";
+  if(key === cards.key) return; cards.key = key;
+  links.innerHTML = ""; placeCards(s);
+}
+function toggleInfo(id){ BD.info = BD.info === id ? null : id; S.video = false; cards.key = null; paint(); }
 function paint(){
   if(V.view !== "board") { $("objs").innerHTML = $("pickg").innerHTML = ""; return; }
+  infoCards();
   paintList(objs().map(obj).join("") + (BD.drag && BD.drag.ghost ? obj(BD.drag.ghost, -1) : ""));
   $("pickg").innerHTML = BD.tool === "pick" && !BD.play ? pickLayer() : BD.tool === "throw" && BD.th ? throwGhost() : "";
 }
@@ -790,7 +801,7 @@ function boardDown(e){
   if(h){ push(); BD.drag = {turn:+h.dataset.h}; cap(); return false; }
   if(BD.tool === "erase"){ if(i >= 0){ push(); del(i); } BD.drag = {erase:true}; cap(); return false; }
   if(i >= 0 && (BD.tool === "select" || ["tok","foe","c4","dead","nade","ln"].includes(o.t))){
-    push(); if(BD.tool === "select") BD.sel = i; BD.drag = {move:i, from:p, o:clone(o), moved:false}; cap(); paint(); return false; }
+    push(); if(BD.tool === "select") BD.sel = i; BD.drag = {move:i, from:p, o:clone(o), moved:false, ts:!!e.target.closest("[data-ts]")}; cap(); paint(); return false; }
   if(BD.tool === "select") return true;   // empty place: pan
   if(BD.tool === "text"){ textAt(p); return false; }
   const c = COLORS[BD.color];
@@ -830,7 +841,7 @@ function boardUp(){
     return; }
   if(d.pick){ pickAt(d.pick); return; }
   if(BD.remote) setTimeout(applyRemote, 0);
-  if(d.move !== undefined){ if(!d.moved) BD.undo.pop(); saveBoard(); paint(); boardBars(); return; }
+  if(d.move !== undefined){ if(!d.moved){ BD.undo.pop(); if(d.ts){ BD.sel = -1; toggleInfo(objs()[d.move].id); boardBars(); return; } } saveBoard(); paint(); boardBars(); return; }
   if(d.turn !== undefined){ saveBoard(); paint(); boardBars(); return; }
   if(d.erase) return;
   const g = d.ghost, w = LW();
@@ -845,6 +856,7 @@ function place(p){
   if(t === "c4"){ const o = list.find(o => o.t === "c4"); push(); if(o){ o.x = x; o.y = y; } else list.push({t:"c4", id:"c4", x, y}); saveBoard(); paint(); boardBars(); return; }
   if(t === "foe" || t === "dead") commit({t, id:uid(), x, y});
   else if(t === "fx") commit({t:"nade", k:BD.kind, id:uid(), x, y});
+  else if(t === "pick" && BD.pk.open >= 0){ BD.pk.open = -1; paint(); }
 }
 function textAt(p, i = -1){
   const r = stage.getBoundingClientRect(), k = base*S.z, inp = document.createElement("input");
@@ -862,7 +874,7 @@ function textAt(p, i = -1){
 stage.addEventListener("dblclick", e => { if(V.view !== "board") return; const i = hit(e); if(i >= 0 && objs()[i].t === "text") textAt([objs()[i].x, objs()[i].y], i); });
 
 // steps, played one after another: tokens with the same number or id move, as on Gamecoach's slides
-function goStep(k){ if(k < 0 || k >= BD.steps.length) return; if(BD.play) stopPlay(); BD.cur = k; BD.sel = -1; BD.sure = false; boardUI(); }
+function goStep(k){ if(k < 0 || k >= BD.steps.length) return; if(BD.play) stopPlay(); BD.cur = k; BD.info = null; BD.sel = -1; BD.sure = false; boardUI(); }
 function addStep(){ push(); BD.steps.splice(BD.cur+1, 0, {o:objs().filter(o => KEEP.includes(o.t)).map(clone), note:""}); BD.cur++; BD.sel = -1; saveBoard(); boardUI(); }
 function delStep(){ if(BD.steps.length < 2) return; push(); BD.steps.splice(BD.cur, 1); BD.cur = Math.min(BD.cur, BD.steps.length-1); BD.sel = -1; saveBoard(); boardUI(); }
 const keyOf = o => o.t === "tok" ? "t" + o.n : o.id ? o.t + o.id : null;
@@ -1030,20 +1042,28 @@ function pickLayer(){
   const tip = i => `<title>${esc(D.items[i].to)} · ${esc(D.items[i].from)}</title>`;
   const on = new Set(objs().filter(o => o.t === "ln").map(o => o.ref)), isOn = i => on.has(D.items[i].k);
   const fav = m => m.some(i => FAV.ids.has(D.items[i].slug));
-  let lines = "", dots = "", tops = "";
+  const opened = BD.pk.open >= 0 && cl[BD.pk.open];
+  let lines = "", dots = "", tops = "", front = "";
   cl.forEach((g, ci) => {
-    const [x, y] = g.l, open = BD.pk.open === ci, show = open || BD.pk.hot === ci;
-    if(show) g.m.forEach(i => { const it = D.items[i], [tx, ty] = it.t;
-      lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round"/><line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/>`;
-      dots += `<g data-pi="${i}"><circle cx="${tx}" cy="${ty}" r="${w*2.6}" fill="transparent"/><circle cx="${tx}" cy="${ty}" r="${w*1.7}" fill="${isOn(i) ? c : "#0b0e10"}" stroke="${isOn(i) ? "#0b0e10" : c}" stroke-width="${w*.6}"/>${tip(i)}</g>`; });
-    const n = g.m.length, ring = fav(g.m) ? "#f0b443" : c, picked = g.m.some(isOn);
-    dots += `<g data-pc="${ci}"><circle cx="${x}" cy="${y}" r="${r*1.7}" fill="transparent"/>` + (picked
+    const [x, y] = g.l, open = BD.pk.open === ci, n = g.m.length, ring = fav(g.m) ? "#f0b443" : c, picked = g.m.some(isOn);
+    const fade = opened && !open ? ` opacity=".25"` : "";
+    if(!open && BD.pk.hot === ci && !opened) g.m.forEach(i => { const [tx, ty] = D.items[i].t;   // hover: where it is thrown from
+      lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.7}" stroke-dasharray="${w*.2} ${w*1.6}" stroke-linecap="round"/><circle cx="${tx}" cy="${ty}" r="${w*1.2}" fill="${c}"/>`; });
+    dots += `<g data-pc="${ci}"${fade}><circle cx="${x}" cy="${y}" r="${r*1.7}" fill="transparent"/>` + (picked && n === 1
       ? `<circle cx="${x}" cy="${y}" r="${r}" fill="transparent" stroke="${ring}" stroke-width="${w*.45}" stroke-dasharray="${w*.9} ${w*.6}"/>`
-      : `<circle cx="${x}" cy="${y}" r="${r}" fill="#0b0e10" stroke="${ring}" stroke-width="${w*(open ? .9 : .6)}"/>${kglyph(BD.kind, x, y, r*1.15, c)}`) +
+      : `<circle cx="${x}" cy="${y}" r="${r}" fill="#0b0e10" stroke="${open ? "#fff" : ring}" stroke-width="${w*(open ? .9 : .6)}"/>${kglyph(BD.kind, x, y, r*1.15, c)}`) +
       (n === 1 ? tip(g.m[0]) : `<title>${esc(D.items[g.m[0]].to)}</title>`) + `</g>`;
-    if(n > 1) tops += `<g data-pc="${ci}"><circle cx="${x+r*.85}" cy="${y-r*.85}" r="${w*1.9}" fill="#f0b443" stroke="#0b0e10" stroke-width="${w*.4}"/><text x="${x+r*.85}" y="${y-r*.85}" dy=".35em" text-anchor="middle" font-size="${w*2.5}" font-weight="700" font-family="Golos Text,sans-serif" fill="#1a1205">${n}</text></g>`;
+    if(n > 1) tops += `<g data-pc="${ci}"${fade}><circle cx="${x+r*.85}" cy="${y-r*.85}" r="${w*1.9}" fill="#f0b443" stroke="#0b0e10" stroke-width="${w*.4}"/><text x="${x+r*.85}" y="${y-r*.85}" dy=".35em" text-anchor="middle" font-size="${w*2.5}" font-weight="700" font-family="Golos Text,sans-serif" fill="#1a1205">${n}</text></g>`;
+    if(open){   // the group's throw spots: one big marker each, where it stands on the map
+      const rt = r*.9;
+      g.m.forEach(i => { const it = D.items[i], [tx, ty] = it.t, onI = isOn(i);
+        lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round"/><line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/>`;
+        front += `<g data-pi="${i}"><circle cx="${tx}" cy="${ty}" r="${rt*1.6}" fill="transparent"/><circle cx="${tx}" cy="${ty}" r="${rt}" fill="${onI ? c : "#0b0e10"}" stroke="${onI ? "#fff" : c}" stroke-width="${w*.7}"/>` +
+          `<g transform="translate(${tx-rt*.6} ${ty-rt*.6}) scale(${rt*1.2/24})" fill="none" stroke="${onI ? "#0b0e10" : c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" pointer-events="none">${lsvg("person-standing")}</g>` +
+          tip(i) + `</g>`; });
+    }
   });
-  return lines + dots + tops;
+  return `<g opacity=".6">${lines}</g>` + dots + tops + front;
 }
 function putLineup(i){
   const it = D.items[i], list = objs(), at = list.findIndex(o => o.t === "ln" && o.ref === it.k);
@@ -1054,7 +1074,8 @@ function pickAt(m){
   if(m.pi !== undefined){ putLineup(m.pi); return; }
   const g = pickClusters()[m.pc]; if(!g) return;
   if(g.m.length === 1){ putLineup(g.m[0]); return; }
-  BD.pk.open = BD.pk.open === m.pc ? -1 : m.pc; paint();
+  BD.pk.open = BD.pk.open === m.pc ? -1 : m.pc;
+  paint();
 }
 stage.addEventListener("pointerover", e => {
   if(V.view !== "board" || BD.tool !== "pick" || e.pointerType === "touch") return;
@@ -1099,6 +1120,7 @@ addEventListener("keydown", e => {
   if((e.ctrlKey || e.metaKey) && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
   if(e.ctrlKey || e.metaKey || e.altKey) return;
   if((e.key === "Delete" || e.key === "Backspace") && BD.sel >= 0){ push(); del(BD.sel); return; }
+  if(e.key === "Escape" && BD.info){ BD.info = null; paint(); return; }
   if(e.key === "Escape"){ kindClose(); if(BD.th){ BD.th = BD.thTo = null; paint(); } else if(["pick", "throw", "fx"].includes(BD.tool)) setTool("select"); else { BD.sel = -1; paint(); } return; }
   if(e.key === "ArrowLeft"){ goStep(BD.cur-1); return; }
   if(e.key === "ArrowRight"){ goStep(BD.cur+1); return; }
