@@ -187,7 +187,7 @@ img,svg image{-webkit-user-drag:none}
 /* how to throw */
 .how{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:9px;background:var(--raise);color:var(--fg);font:600 13px var(--body);white-space:nowrap}
 .how b{font-weight:600}
-.how .ms{width:15px;height:21px;flex:none}
+.how .ms{width:17px;height:24px;flex:none}
 .how .hj svg{width:20px;height:20px;stroke-width:2.2;display:block;color:var(--accent)}
 .how kbd{font:700 12px/1 var(--body);border:1.5px solid currentColor;border-radius:5px;padding:3px 6px}
 .how.big{height:auto;padding:10px 14px;gap:12px;font-size:16px}
@@ -303,8 +303,9 @@ const stage = $("stage"), world = $("world"), marks = $("marks"), links = $("lin
 const col = k => getComputedStyle(document.documentElement).getPropertyValue("--"+k).trim();
 const icon = (n, cls="") => `<i data-lucide="${n}" class="${cls}"></i>`;
 const draw = () => window.lucide && lucide.createIcons();
-const mouseSvg = c => `<svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><path d="M8 1.5A6.5 6.5 0 0 0 1.5 8v1H8z" fill="${c.includes("l") ? "currentColor" : "none"}"/><path d="M8 1.5A6.5 6.5 0 0 1 14.5 8v1H8z" fill="${c.includes("r") ? "currentColor" : "none"}"/><rect x="1.5" y="1.5" width="13" height="19" rx="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5V9M1.5 9h13" stroke="currentColor" stroke-width="1.5"/></svg>`;
-const howto = (x, cls = "") => { const [mv, jump, click] = x.th; return `<span class="how ${cls}" title="${x.tech}, ${x.mouse}">${mv === "W" ? "<kbd>W</kbd>" : `<b>${mv}</b>`}${jump ? `<span class="hj">${icon("arrow-big-up")}</span>` : ""}${mouseSvg(click)}</span>`; };
+const mouseSvg = c => `<svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1.2" y="1.2" width="13.6" height="19.6" rx="6.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.2V9.6M1.2 9.6h13.6" stroke="currentColor" stroke-width="1.4"/><path d="M2.6 8.9V8A5.4 5.4 0 0 1 7.1 2.68V8.9z" fill="${c.includes("l") ? "#f0b443" : "none"}"/><path d="M8.9 2.68A5.4 5.4 0 0 1 13.4 8V8.9H8.9z" fill="${c.includes("r") ? "#f0b443" : "none"}"/></svg>`;
+const MOVE = {"W":"<kbd>W</kbd>", "Шаг":"<kbd>Shift</kbd>", "Сидя":"<kbd>Ctrl</kbd>", "Бег":"<b>Бег</b>", "Стоя":""};
+const howto = (x, cls = "") => { const [mv, jump, click] = x.th; return `<span class="how ${cls}" title="${x.tech}, ${x.mouse}">${MOVE[mv] ?? ""}${jump ? `<span class="hj">${icon("arrow-big-up")}</span>` : ""}${mouseSvg(click)}</span>`; };
 
 // map: one entry of DATA.maps is current as D; the rest of the code reads D
 let D;
@@ -1003,235 +1004,53 @@ addEventListener("keydown", e => {
 });
 addEventListener("keyup", e => { if(e.code === "Space"){ BD.space = false; stage.classList.remove("pan"); } });
 
-/* ---------- configs: install notes, autoexec.cfg constructor, cs2_video.txt patcher, practice ----------
-Behaviour copied (ideas only, no code taken):
-- penguinconfig (LaGgIs/cs2-config-generator): settings in groups, one explaining note per item, review, then download.
-- hexui.com/cs2-fps-settings: the player opens his OWN cs2_video.txt, only the quality keys are rewritten, monitor and hardware keys stay.
-The setting list, ranges and pro values come from vault/raw/cs2-tournament-2026-11-06/config-constructor.md (sections 4, 5, 6):
-a cvar is offered only if the dump of build 1.41.9.6 (SteamDatabase DumpSource2/convars.txt) has it. Nothing removed or cheat-flagged is written.
-Defaults ("team") = dev/active/cs2/configs/team-autoexec.cfg. Values the file leaves to the game menu start as «не писать». */
+/* ---------- configs: autoexec.cfg from a base with a few personal choices, cs2_video.txt patcher, practice ----------
+The base is the owner's own autoexec.cfg (windows/cs2/autoexec.cfg, used in the game). «Про» is the same file with the
+personal lines left to the game menu and the radar zoomed as most pros have it: cl_radar_scale 0.4 is the most common
+value (48 of 161 players, psamethod.com, 2026-06-18). Every choice rewrites only its own lines of the base file.
+The cs2_video.txt patcher copies hexui.com/cs2-fps-settings: the player's OWN file in, only the quality keys rewritten. */
 function block(id, text, name){ return `<pre id="${id}">${esc(text)}</pre><div class="acts"><button type="button" class="btn" data-copy="${id}">Скопировать</button><button type="button" class="btn" data-save="${id}" data-name="${name}">Скачать ${name}</button></div>`; }
 
-/* ===== autoexec.cfg constructor: data ===== */
-const cbOnOff = [["1","Вкл"],["0","Выкл"]];
-const cbKeys = [..."abcdefghijklmnopqrstuvwxyz", ..."0123456789", "MOUSE3","MOUSE4","MOUSE5","MWHEELUP","MWHEELDOWN","CAPSLOCK","SHIFT","CTRL","ALT","TAB","SPACE", ...Array.from({length:12}, (_, i) => "F" + (i+1))];
-/* item: id, t (opt|num|key|color|multi), cv (cvar), n (name), d (what it does), o (options), min/max/step/def (num), cmd (bind), team (value in the team file, absent = not written), pro, c (comment in the file) */
-const cbGroups = [
-{id:"net", t:"Сеть и кадры", i:"Влияют на задержку и плавность, не на то, что видно. Команда держит одни значения, чтобы ни у кого не отличалось.", it:[
- {id:"rate", t:"opt", cv:"rate", n:"Приём данных от сервера", d:"Сколько байт в секунду клиент готов принимать от сервера. Игра по умолчанию 80000. Команда ставит максимум.",
-  o:[["786432","786432: максимум, как у команды"],["196608","196608"],["80000","80000: как в игре"]], team:"786432", pro:"donk 786432, ZywOo 196608 (файлы prosettings.net, 24.10.2026)", c:"сколько данных в секунду принимать от сервера"},
- {id:"netbuf", t:"opt", cv:"cl_net_buffer_ticks", n:"Буфер сети в тиках", d:"Задержка в тиках для данных от сервера. 0: без буфера, пинг ниже. 1 и 2 добавляют пинг, зато реже пропадают тики при потере пакетов (заметки Valve от 02.2024 и 12.11.2024). Не меняй cl_interp_ratio сам: он зависит от этого значения.",
-  o:[["0","0"],["1","1"],["2","2"]], team:"0", c:"буфер сети: 0 без задержки"},
- {id:"fps", t:"num", cv:"fps_max", n:"Потолок кадров", d:"Максимум кадров в секунду. 0 значит без потолка. Игра по умолчанию 120.",
-  min:0, step:1, def:"0", team:"0", pro:"0 у 60,5% про с данными: 75 из 124 (psamethod, 18.06.2026)", c:"потолок кадров, 0 без потолка"},
- {id:"nofocus", t:"num", cv:"engine_no_focus_sleep", n:"Пауза, когда окно не в фокусе", d:"Пауза игры между кадрами, пока окно не в фокусе (по названию параметра). Игра по умолчанию 20. Команда ставит 0.",
-  min:0, step:1, def:"0", team:"0", pro:"donk и ZywOo 50 (файлы prosettings.net, 24.10.2026)", c:"пауза при потере фокуса окна"}
-]},
-{id:"radar", t:"Радар", i:"Радар смотришь чаще всего. Команда держит радар по центру, с поворотом, чуть увеличенный.", it:[
- {id:"rcenter", t:"opt", cv:"cl_radar_always_centered", n:"Радар по центру", d:"1: ты всегда в центре радара. 0: радар занимает всю карту.",
-  o:cbOnOff, team:"1", pro:"по центру у 72,2% (143 из 198, psamethod 18.06.2026); donk и ZywOo 1", c:"игрок всегда в центре радара"},
- {id:"rrot", t:"opt", cv:"cl_radar_rotate", n:"Поворот радара", d:"1: радар поворачивается вслед за взглядом. 0: радар не поворачивается.",
-  o:cbOnOff, team:"1", pro:"поворот у 79,3% (157 из 198, psamethod 18.06.2026)", c:"радар поворачивается за взглядом"},
- {id:"rscale", t:"num", cv:"cl_radar_scale", n:"Масштаб карты на радаре", d:"Приближение карты на радаре, от 0.25 до 1. Игра по умолчанию 0.7. Подбери в игре: от числа зависит, сколько карты вокруг тебя видно.",
-  min:0.25, max:1, step:0.05, def:"0.65", team:"0.65", pro:"чаще всего 0.4: 48 из 161, 29,8%; на втором месте 0.7 (psamethod, 18.06.2026). donk 0.7, ZywOo 0.4 (файлы 24.10.2026)", c:"масштаб карты на радаре"},
- {id:"rhud", t:"num", cv:"cl_hud_radar_scale", n:"Размер рамки радара", d:"Размер самого окошка радара на экране, от 0.8 до 1.3. Игра по умолчанию 1.",
-  min:0.8, max:1.3, step:0.05, def:"1.1", team:"1.1", pro:"1 (Escorenews, 20.03.2026)", c:"размер окошка радара"},
- {id:"ricon", t:"num", cv:"cl_radar_icon_scale_min", n:"Минимальный размер значков", d:"Наименьший размер значков игроков на радаре, от 0.4 до 1.25. Игра по умолчанию 0.6.",
-  min:0.4, max:1.25, step:0.05, def:"0.6", pro:"0.6 (donk, ZywOo, Escorenews)", c:"минимальный размер значков на радаре"},
- {id:"rsq", t:"opt", cv:"cl_radar_square_with_scoreboard", n:"Квадратный радар с таблицей счёта", d:"1: пока открыта таблица счёта, радар становится квадратным и показывает больше карты. Игра по умолчанию 1.",
-  o:cbOnOff, pro:"1 (donk, ZywOo, Escorenews)", c:"радар квадратный при таблице счёта"},
- {id:"ralt", t:"num", cv:"cl_radar_scale_alternate", n:"Второй масштаб радара", d:"Второй масштаб, на который переключает клавиша из группы «Клавиши». От 0.25 до 1. Игра по умолчанию 1.",
-  min:0.25, max:1, step:0.05, def:"1", pro:"donk переключает 0.7 и 1 на CapsLock", c:"второй масштаб радара"},
- {id:"rtog", t:"key", cmd:"toggleradarscale", n:"Клавиша: переключить масштаб радара", d:"Переключает радар между основным и вторым масштабом.", pro:"donk: CapsLock", c:"переключить масштаб радара"}
-]},
-{id:"sound", t:"Звук", i:"Громкость остаётся в меню игры: строка в файле перекрывает ползунок при каждом запуске. Музыку и лишние сигналы команда выключает.", it:[
- {id:"volume", t:"num", cv:"volume", n:"Общая громкость", d:"Громкость игры от 0 до 1. Личное дело: у каждого свой уровень, поэтому по умолчанию не пишем.",
-  min:0, max:1, step:0.01, def:"0.5", pro:"donk 0.1, ZywOo 0.3 (файлы prosettings.net, 24.10.2026)", c:"общая громкость"},
- {id:"losefocus", t:"opt", cv:"snd_mute_losefocus", n:"Глушить звук без фокуса", d:"1: звук выключается, когда окно игры теряет фокус. 0: звук остаётся, когда ты переключился в другое окно. Игра по умолчанию 1.",
-  o:cbOnOff, team:"0", pro:"donk 1, ZywOo 1 (файлы 24.10.2026)", c:"звук без фокуса окна"},
- {id:"music", t:"multi", n:"Музыка и сигналы раунда", d:"Отмеченные звуки получат громкость 0. Сколько про их выключают, написано рядом.", pro:"сводка Escorenews по ~800 про, 20.03.2026",
-  cvs:[["snd_menumusic_volume","музыка меню","80,5% про",""],["snd_mvp_volume","музыка MVP","68,0% про",""],["snd_roundstart_volume","начало раунда","64,1% про",""],["snd_roundend_volume","конец раунда","61,1% про",""],["snd_roundaction_volume","действие раунда","",""],["snd_mapobjective_volume","цель на карте","62,4% про",""],["snd_deathcamera_volume","камера смерти","81,4% про",""],["snd_tensecondwarning_volume","предупреждение за 10 секунд","",""]],
-  team:["snd_menumusic_volume","snd_mvp_volume","snd_roundstart_volume","snd_roundend_volume","snd_roundaction_volume","snd_mapobjective_volume","snd_deathcamera_volume","snd_tensecondwarning_volume"], c:"музыка и сигналы: выключено"},
- {id:"eq", t:"opt", cv:"snd_headphone_eq", n:"Эквалайзер наушников", d:"Подсказка меню игры: 0 Natural, 1 Crisp, 2 Smooth. Игра по умолчанию 0.",
-  o:[["0","0 Natural"],["1","1 Crisp"],["2","2 Smooth"]], pro:"donk и ZywOo оставили по умолчанию", c:"эквалайзер наушников"},
- {id:"lerp", t:"num", cv:"snd_spatialize_lerp", n:"Разделение лево и право", d:"От 0 до 1. 0: физически точно, 1: жёсткое разделение каналов (подсказка меню игры). Игра по умолчанию 0.",
-  min:0, max:1, step:0.1, def:"0", pro:"у про по умолчанию", c:"разделение каналов лево и право"},
- {id:"mixahead", t:"num", cv:"snd_mixahead", n:"Опережение звукового буфера", d:"Секунды. Меньше: ниже задержка звука. Больше: меньше треска (заметка penguinconfig). Игра по умолчанию 0.001.",
-  min:0, step:0.001, def:"0.025", pro:"donk и ZywOo 0.025 (файлы 24.10.2026)", c:"опережение звукового буфера"}
-]},
-{id:"voice", t:"Голос и связь", i:"Клавиши голоса и пинга ставятся в группе «Клавиши». Здесь настройки чата.", it:[
- {id:"vmode", t:"opt", cv:"voice_modenable", n:"Голосовой чат", d:"Главный выключатель голоса. Игра по умолчанию 1.", o:cbOnOff, c:"голосовой чат включён"},
- {id:"vvox", t:"opt", cv:"voice_vox", n:"Микрофон по голосу", d:"1: микрофон открывается голосом, без клавиши. 0: только по клавише. Игра по умолчанию 0.", o:cbOnOff, c:"микрофон по голосу вместо клавиши"},
- {id:"muteen", t:"opt", cv:"cl_mute_enemy_team", n:"Не слышать противников", d:"1: чат вражеской команды заблокирован. Игра по умолчанию 0.", o:cbOnOff, pro:"donk 0, ZywOo 0 (файлы 24.10.2026)", c:"чат противников"},
- {id:"mutefp", t:"opt", cv:"cl_mute_all_but_friends_and_party", n:"Слышать только друзей и группу", d:"0: выключено. 1: только друзья и группа, в режимах без рейтинга. 2: во всех режимах. Игра по умолчанию 0.",
-  o:[["0","0"],["1","1"],["2","2"]], c:"слышны только друзья и группа"},
- {id:"pingmute", t:"opt", cv:"cl_player_ping_mute", n:"Звук пингов", d:"По описанию Valve: 1 пинги со звуком, 0 пинги тихие. По названию кажется наоборот, поэтому проверь в игре. Игра по умолчанию 0.",
-  o:[["0","0: тихо"],["1","1: со звуком"]], pro:"donk 1, ZywOo 0 (файлы 24.10.2026)", c:"звук пингов, 1 со звуком"},
- {id:"voipvol", t:"num", cv:"snd_voipvolume", n:"Громкость голосового чата", d:"От 0 до 2. Игра по умолчанию 1.", min:0, max:2, step:0.1, def:"1", c:"громкость голосового чата"},
- {id:"clutch", t:"opt", cv:"cl_clutch_mode", n:"Режим клатча", d:"1: «глушит голос и другие отвлекающие звуки до конца раунда или до следующей смерти» (описание Valve). Включать и выключать можно командой clutch_mode_toggle. Игра по умолчанию 0.",
-  o:cbOnOff, c:"режим клатча: тишина до конца раунда"}
-]},
-{id:"hud", t:"Интерфейс и видимость", i:"Что видно на экране. Контраст игроков и метки над союзниками команда включает.", it:[
- {id:"contrast", t:"opt", cv:"r_player_visibility_mode", n:"Контраст игроков", d:"В меню «Boost Player Contrast». Valve: «улучшает читаемость игроков при низком контрасте, может снизить FPS». Игра по умолчанию 1.",
-  o:cbOnOff, team:"1", pro:"включён по гайду prosettings.net, ноябрь 2026", c:"игроки заметнее на тёмном фоне"},
- {id:"overhead", t:"opt", cv:"cl_teamid_overhead_mode", n:"Метка над союзником", d:"0: нет. 1: значок. 2: значок и имя. 3: значок, имя и снаряжение. Игра по умолчанию 3.",
-  o:[["0","0"],["1","1"],["2","2"],["3","3"]], team:"3", pro:"2 у 92,8% (Escorenews, 20.03.2026)", c:"метка над союзником: значок, имя, снаряжение"},
- {id:"loadout", t:"opt", cv:"cl_showloadout", n:"Своё снаряжение на экране", d:"1: показывать на экране своё снаряжение. Игра по умолчанию 1.", o:cbOnOff, team:"1", pro:"1 у 71,5% (по сводке Escorenews, 20.03.2026)", c:"показывать своё снаряжение"},
- {id:"autohelp", t:"opt", cv:"cl_autohelp", n:"Подсказки игры", d:"Автоматические подсказки по управлению. Игра по умолчанию 1.", o:cbOnOff, team:"0", c:"подсказки игры"},
- {id:"tping", t:"opt", cv:"cl_hud_telemetry_ping_show", n:"Пинг на экране", d:"0: никогда. 1: только когда плохо (пинг от 100 мс). 2: всегда.", o:[["0","0 никогда"],["1","1 когда плохо"],["2","2 всегда"]], team:"1", c:"пинг на экране, когда плохой"},
- {id:"tloss", t:"opt", cv:"cl_hud_telemetry_net_misdelivery_show", n:"Потери пакетов на экране", d:"0: никогда. 1: только когда плохо (порог 2). 2: всегда.", o:[["0","0 никогда"],["1","1 когда плохо"],["2","2 всегда"]], team:"1", c:"потери пакетов на экране, когда плохие"},
- {id:"tframe", t:"opt", cv:"cl_hud_telemetry_frametime_show", n:"Время кадра на экране", d:"0: никогда. 1: только когда плохо (от 100). 2: всегда.", o:[["0","0 никогда"],["1","1 когда плохо"],["2","2 всегда"]], c:"время кадра на экране"},
- {id:"showfps", t:"opt", cv:"cl_showfps", n:"Счётчик кадров", d:"0: выключен. 1: кадры в секунду. 2: сглаженные кадры. 3: время сервера в мс. Игра по умолчанию 0.", o:[["0","0"],["1","1"],["2","2"],["3","3"]], c:"счётчик кадров"},
- {id:"targetid", t:"opt", cv:"hud_showtargetid", n:"Имя игрока под прицелом", d:"1: показывать имя игрока, на которого наведён прицел. Игра по умолчанию 1.", o:cbOnOff, pro:"1 у 77,4% (Escorenews, 20.03.2026)", c:"имя игрока под прицелом"},
- {id:"hudscale", t:"num", cv:"hud_scaling", n:"Размер интерфейса", d:"От 0.9 до 1.1. Игра по умолчанию 1.", min:0.9, max:1.1, step:0.01, def:"1", pro:"1 (donk, ZywOo)", c:"размер интерфейса"},
- {id:"hudcolor", t:"opt", cv:"cl_hud_color", n:"Цвет интерфейса", d:"Цвет элементов интерфейса. Игра по умолчанию 0.",
-  o:[["0","0 цвет команды"],["1","1 белый"],["2","2 ярко-белый"],["3","3 светло-синий"],["4","4 синий"],["5","5 фиолетовый"],["6","6 красный"],["7","7 оранжевый"],["8","8 жёлтый"],["9","9 зелёный"],["10","10 бирюзовый"],["11","11 розовый"],["12","12 цвет игрока"]], pro:"цвет команды у 41% (psamethod); donk 11, ZywOo 0", c:"цвет интерфейса"},
- {id:"tmcolors", t:"opt", cv:"cl_teammate_colors_show", n:"Цвета союзников", d:"1: у союзников разные цвета на радаре, в таблице счёта и т. д. 2: цвета и буквы (соревновательный режим). Игра по умолчанию 1.",
-  o:[["1","1 цвета"],["2","2 цвета и буквы"]], pro:"1 у 88,7% (Escorenews, 20.03.2026)", c:"цвета союзников"},
- {id:"usebuy", t:"opt", cv:"cl_use_opens_buy_menu", n:"Меню покупок по E", d:"1: клавиша «использовать» в зоне закупки открывает меню покупок. Игра по умолчанию 0.", o:cbOnOff, c:"E в зоне закупки открывает меню"},
- {id:"gamma", t:"num", cv:"r_fullscreen_gamma", n:"Яркость", d:"Яркость картинки, от 1 до 4. Игра по умолчанию 2.2. В меню это «Яркость»; значение из файла перекрывает ползунок.",
-  min:1, max:4, step:0.1, def:"2.2", pro:"donk 87% по шкале меню (prosettings.net, 28.10.2026)", c:"яркость"}
-]},
-{id:"vm", t:"Вьюмодель (оружие в руках)", i:"Положение и угол оружия на экране. Остаётся в меню игры, пока ты не захочешь записать значения.", pre:[{t:"Как у большинства про: 68 / 2.5 / 0 / −1.5", v:{vmfov:"68", vmx:"2.5", vmy:"0", vmz:"-1.5"}}], it:[
- {id:"vmpos", t:"opt", cv:"viewmodel_presetpos", n:"Пресет положения", d:"Готовое положение оружия. Пресет пишется первым: он может сбросить смещения (Peksa, 02.09.2023), поэтому смещения идут после него. По описанию в игре 1 Desktop, 2 Classic; в меню есть и Couch, его номер 3 в описании игры не расписан. Игра по умолчанию 1.",
-  o:[["1","1 Desktop"],["2","2 Classic"],["3","3 (в меню Couch)"]], pro:"donk 2; Escorenews 2 (20.03.2026)", c:"пресет положения оружия"},
- {id:"vmfov", t:"num", cv:"viewmodel_fov", n:"Угол обзора оружия", d:"От 60 до 68. Игра по умолчанию 60.", min:60, max:68, step:1, def:"68", pro:"68 у 85,3% (psamethod, 18.06.2026) и у 91,2% (CS2-Pro-Settings, 11.08.2026)", c:"угол обзора оружия"},
- {id:"vmx", t:"num", cv:"viewmodel_offset_x", n:"Смещение вправо", d:"От −2 до 2.5. Игра по умолчанию 1.", min:-2, max:2.5, step:0.1, def:"2.5", pro:"2.5 у 84,3% (psamethod, 18.06.2026)", c:"оружие вправо"},
- {id:"vmy", t:"num", cv:"viewmodel_offset_y", n:"Смещение вперёд", d:"От −2 до 2. Игра по умолчанию 1.", min:-2, max:2, step:0.1, def:"0", pro:"0 у 73,6% (psamethod, 18.06.2026)", c:"оружие вперёд"},
- {id:"vmz", t:"num", cv:"viewmodel_offset_z", n:"Смещение вверх", d:"От −2 до 2. Игра по умолчанию −1.", min:-2, max:2, step:0.1, def:"-1.5", pro:"−1.5 у 73,6% (psamethod, 18.06.2026). Набор 68 / 2.5 / 0 / −1.5 у 131 игрока", c:"оружие вверх"},
- {id:"vmleft", t:"opt", cv:"cl_prefer_lefthanded", n:"Оружие в левой руке", d:"1: модель оружия в левой руке. Игра по умолчанию 0.", o:cbOnOff, c:"оружие в левой руке"}
-]},
-{id:"cross", t:"Прицел", i:"Прицел проще настроить в меню игры. Если пишешь в файл, то: система прицела новая (с 22.09.2026), длина, толщина и зазор задаются в пикселях для высоты экрана из строки «высота экрана». Задаёшь размеры, задай и высоту. Старые cl_crosshairsize, cl_crosshairgap и cl_crosshaircolor из игры убраны, конструктор их не пишет.", it:[
- {id:"cstyle", t:"opt", cv:"cl_crosshairstyle", n:"Вид прицела", d:"Игра по умолчанию 7.",
-  o:[["0","0 динамический крест"],["1","1 динамический круг"],["2","2 динамический крест (старый)"],["3","3 статичный круг"],["4","4 статичный крест"],["5","5 статичный крест (с откликом выстрела)"],["6","6 только точка"],["7","7 динамический Quad"],["8","8 статичный квадрат"],["9","9 статичный Quad"]], c:"вид прицела"},
- {id:"cheight", t:"num", cv:"cl_crosshair_screen_height", n:"Высота экрана для размеров", d:"Высота в пикселях, для которой заданы размеры. Игра сама пересчитывает их под твоё разрешение. От 240, игра по умолчанию 1080.",
-  min:240, step:1, def:"1080", pro:"donk 960, ZywOo 768 (файлы 24.10.2026)", c:"высота экрана, для которой заданы размеры"},
- {id:"clen", t:"num", cv:"cl_crosshair_length", n:"Длина линий", d:"От 0 до 255 пикселей. Игра по умолчанию 8.", min:0, max:255, step:1, def:"2", pro:"donk 2, ZywOo 2 (файлы 24.10.2026)", c:"длина линий прицела"},
- {id:"cthick", t:"num", cv:"cl_crosshair_thickness", n:"Толщина линий", d:"От 0 до 32 пикселей. Игра по умолчанию 2.", min:0, max:32, step:1, def:"2", pro:"donk 2, ZywOo 2 (файлы 24.10.2026)", c:"толщина линий прицела"},
- {id:"cgap", t:"num", cv:"cl_crosshair_gap", n:"Зазор в центре", d:"От −3840 до 3840 пикселей. Игра по умолчанию 4.", min:-3840, max:3840, step:1, def:"1", pro:"donk 1, ZywOo 2 (файлы 24.10.2026)", c:"зазор в центре прицела"},
- {id:"ccolor", t:"color", cv:"cl_crosshaircolor", n:"Цвет", d:"Игра по умолчанию зелёный (0, 255, 0). Пишутся три строки: красный, зелёный, синий.", def:"#00ff00", c:"цвет прицела"},
- {id:"coutline", t:"opt", cv:"cl_crosshair_drawoutline", n:"Контур", d:"0: нет. 1: полный контур. 2: половинный контур (с 23.09.2026).", o:[["0","0 нет"],["1","1 полный"],["2","2 половинный"]], c:"контур прицела"},
- {id:"cdot", t:"opt", cv:"cl_crosshairdot", n:"Точка в центре", d:"Игра по умолчанию 0.", o:cbOnOff, pro:"выключена (Escorenews, сводка ~800 про, 20.03.2026)", c:"точка в центре прицела"},
- {id:"ct", t:"opt", cv:"cl_crosshair_t", n:"Прицел буквой T", d:"1: верхняя линия скрыта. Игра по умолчанию 0.", o:cbOnOff, pro:"выключен (Escorenews, 20.03.2026)", c:"прицел буквой T"},
- {id:"crecoil", t:"opt", cv:"cl_crosshair_recoil", n:"Прицел следует за отдачей", d:"Игра по умолчанию 1.", o:cbOnOff, pro:"выключено (Escorenews, 20.03.2026)", c:"прицел следует за отдачей"}
-]},
-{id:"mouse", t:"Мышь", i:"Чувствительность личная, поэтому остаётся в меню игры. DPI и частота опроса настраиваются в программе мыши, не в файле. Строку m_rawinput писать не нужно: в CS2 сырой ввод включён всегда.", it:[
- {id:"sens", t:"num", cv:"sensitivity", n:"Чувствительность", d:"От 0.0001 до 8. Игра по умолчанию 1.25. Сравнивай по eDPI: DPI мыши, умноженный на чувствительность.",
-  min:0.0001, max:8, step:0.01, def:"1.25", edpi:true, pro:"медиана eDPI 800 (CS2-Pro-Settings, 11.08.2026, 133 игрока; confighub.gg: среднее 886,8 у 1968 про)", c:"чувствительность мыши"},
- {id:"zsens", t:"num", cv:"zoom_sensitivity_ratio", n:"Чувствительность в прицеле", d:"Во сколько раз меняется чувствительность при зуме, от 0.01 до 3. Игра по умолчанию 1.", min:0.01, max:3, step:0.01, def:"1", pro:"donk 1, ZywOo 1 (файлы 24.10.2026)", c:"чувствительность в прицеле снайперки"}
-]},
-{id:"binds", t:"Клавиши", i:"Одна клавиша: одно действие. Бинды, где в одной клавише несколько движений (прыжок с броском и подобные), игра с 19.08.2024 не выполняет, Snap Tap карается киком, поэтому конструктор такие не предлагает. Игра запоминает бинды из файла: убрал строку, а клавиша осталась. Верни её в меню или командой unbind.", it:[
- {id:"kHe", t:"key", cmd:"slot6", n:"Клавиша: хаешка (HE)", d:"Берёт гранату в руку.", team:"v", c:"хаешка"},
- {id:"kFl", t:"key", cmd:"slot7", n:"Клавиша: флешка", d:"Берёт флешку в руку.", team:"x", c:"флешка"},
- {id:"kSm", t:"key", cmd:"slot8", n:"Клавиша: смок", d:"Берёт смок в руку.", team:"z", c:"смок"},
- {id:"kDe", t:"key", cmd:"slot9", n:"Клавиша: приманка (decoy)", d:"Берёт приманку.", c:"приманка"},
- {id:"kMo", t:"key", cmd:"slot10", n:"Клавиша: молотов", d:"Берёт молотов или зажигательную гранату.", team:"c", c:"молотов"},
- {id:"kV1", t:"key", cmd:"+voicerecord", n:"Клавиша голоса, первая", d:"Говоришь, пока держишь клавишу. Valve по умолчанию ставит MOUSE4.", team:"MOUSE4", c:"говорить, пока зажата"},
- {id:"kV2", t:"key", cmd:"+voicerecord", n:"Клавиша голоса, вторая", d:"Та же команда на второй клавише.", team:"MOUSE5", c:"говорить, пока зажата"},
- {id:"kPing", t:"key", cmd:"player_ping", n:"Клавиша метки", d:"Ставит метку (пинг) туда, куда смотришь.", team:"MOUSE3", c:"метка на карте"},
- {id:"kLast", t:"key", cmd:"lastinv", n:"Клавиша: прошлое оружие", d:"Возвращает предыдущее оружие в руки.", c:"прошлое оружие"},
- {id:"kBr", t:"key", cmd:"buy ak47 ; buy m4a4", n:"Покупка: винтовка", d:"Одна клавиша покупает AK-47 или M4A4 по стороне. Имена предметов взяты из файла ZywOo (24.10.2026), в игре команды не проверены.", pro:"ZywOo: покупка в один клик на каждую клавишу", c:"купить винтовку"},
- {id:"kBa", t:"key", cmd:"buy awp", n:"Покупка: AWP", d:"Покупает AWP.", c:"купить AWP"},
- {id:"kBv", t:"key", cmd:"buy vesthelm ; buy vest", n:"Покупка: броня", d:"Покупает бронежилет со шлемом, а если шлем есть, то только жилет.", c:"купить броню"},
- {id:"kBd", t:"key", cmd:"buy defuser", n:"Покупка: набор сапёра", d:"Покупает набор сапёра.", c:"купить набор сапёра"},
- {id:"kBs", t:"key", cmd:"buy smokegrenade", n:"Покупка: смок", d:"Покупает смок.", c:"купить смок"},
- {id:"kBf", t:"key", cmd:"buy flashbang", n:"Покупка: флешка", d:"Покупает флешку.", c:"купить флешку"},
- {id:"kBh", t:"key", cmd:"buy hegrenade", n:"Покупка: хаешка", d:"Покупает хаешку.", c:"купить хаешку"},
- {id:"kBm", t:"key", cmd:"buy molotov", n:"Покупка: молотов", d:"Покупает молотов.", c:"купить молотов"}
-]}
+const cbLine = (t, re, v) => t.replace(re, m => v === null ? "" : m.replace(/"[^"]*"\s*$/, `"${v}"`));
+const cbCut = (t, from, to) => { const a = t.indexOf(from), b = t.indexOf(to, a + 1); return a < 0 || b < 0 ? t : t.slice(0, a) + t.slice(b); };
+/* one row per choice: options [value, label], what the base files use, and how a value rewrites the file */
+const CB = [
+ {id:"sens", n:"Чувствительность", t:"num", min:0.05, max:8, step:0.01, mine:"0.65", pro:null,
+  apply:(t, v) => cbLine(t, /^sensitivity "[^"]*"\s*$/m, v)},
+ {id:"cross", n:"Прицел", o:[["dot","Точка"],[null,"Из меню"]], mine:"dot", pro:null,
+  apply:(t, v) => v ? t : cbCut(t, "// ---------- Прицел", "// ---------- Клавиши")},
+ {id:"vm", n:"Оружие в руках", o:[["pro","68 / 2.5 / 0 / −1.5"],[null,"Из меню"]], mine:"pro", pro:"pro",
+  apply:(t, v) => v ? t : t.replace(/^\/\/ Вьюмодель.*\n(viewmodel_[^\n]*\n)+/m, "")},
+ {id:"radar", n:"Масштаб радара", t:"num", min:0.25, max:1, step:0.05, mine:"0.65", pro:"0.4",
+  apply:(t, v) => cbLine(t, /^cl_radar_scale "[^"]*"\s*$/m, v)},
+ {id:"vol", n:"Громкость", t:"num", min:0, max:1, step:0.05, mine:"0.65", pro:null,
+  apply:(t, v) => cbLine(t, /^volume "[^"]*"\s*$/m, v)},
+ {id:"jump", n:"Прыжок", o:[["wheel","Колесо мыши"],["space","Пробел"]], mine:"wheel", pro:"space",
+  apply:(t, v) => v === "wheel" ? t : t.replace(/^\/\/ Прыжок на колесо[^\n]*\nbind "MWHEELUP" "\+jump"\nbind "MWHEELDOWN" "\+jump"\nunbind "SPACE"\n/m, 'bind "SPACE" "+jump"\nbind "MWHEELUP" "invprev"\nbind "MWHEELDOWN" "invnext"\n')},
+ {id:"nades", n:"Гранаты", o:[["vxzc","V X Z C"],[null,"Не менять"]], mine:"vxzc", pro:"vxzc",
+  apply:(t, v) => v ? t : t.replace(/^\/\/ Гранаты:[^\n]*\n(bind "[a-z]" "slot(6|7|8|10)"\n)+/m, "")}
 ];
-const cbItems = cbGroups.flatMap(g => g.it);
-const cbById = Object.fromEntries(cbItems.map(i => [i.id, i]));
-const cbKEY = "cs2cfg-builder";
-
-/* ===== constructor: state (only the choices that differ from the team file are kept) ===== */
-const cbDefault = it => it.team === undefined ? null : it.team;
-const cbS = {ov:{}, com:true, dpi:"800"};
-function cbValid(it, v){
-  if(v === null) return true;
-  if(it.t === "opt") return it.o.some(o => o[0] === v);
-  if(it.t === "num"){ const n = Number(v); return v !== "" && isFinite(n) && (it.min === undefined || n >= it.min) && (it.max === undefined || n <= it.max); }
-  if(it.t === "key") return cbKeys.includes(v);
-  if(it.t === "color") return /^#[0-9a-f]{6}$/.test(v);
-  if(it.t === "multi") return Array.isArray(v) && v.every(x => it.cvs.some(c => c[0] === x));
-  return false;
-}
-function cbLoad(){
-  const o = store(s => JSON.parse(s.getItem(cbKEY) || "{}"), {});
-  if(o && typeof o.ov === "object" && o.ov) for(const id in o.ov){ const it = cbById[id]; if(it && cbValid(it, o.ov[id])) cbS.ov[id] = o.ov[id]; }
-  if(o && o.com === false) cbS.com = false;
-  if(o && /^\d{2,5}$/.test(o.dpi)) cbS.dpi = o.dpi;
-}
-cbLoad();
-const cbSave = () => store(s => s.setItem(cbKEY, JSON.stringify({ov:cbS.ov, com:cbS.com, dpi:cbS.dpi})));
-const cbVal = it => it.id in cbS.ov ? cbS.ov[it.id] : cbDefault(it);
-function cbSet(it, v){
-  if(JSON.stringify(v) === JSON.stringify(cbDefault(it))) delete cbS.ov[it.id]; else cbS.ov[it.id] = v;
-  cbSave();
-}
-
-/* ===== constructor: output ===== */
-function cbLines(it){
-  const v = cbVal(it); if(v === null) return [];
-  if(it.t === "opt" || it.t === "num") return [[`${it.cv} "${it.t === "num" ? String(Number(v)) : v}"`, it.c]];
-  if(it.t === "key") return [[`bind "${v}" "${it.cmd}"`, it.c]];
-  if(it.t === "color"){ const n = parseInt(v.slice(1), 16); return [["r", "красный", n >> 16], ["g", "зелёный", (n >> 8) & 255], ["b", "синий", n & 255]].map(([k, name, x]) => [`${it.cv}_${k} "${x}"`, `${it.c}: ${name}`]); }
-  if(it.t === "multi") return it.cvs.filter(c => v.includes(c[0])).map(c => [`${c[0]} "0"`, c[1] + ": выключено"]);
-  return [];
-}
-function cbWarn(){
-  const w = [], used = {};
-  for(const it of cbItems){ if(it.t !== "key") continue; const v = cbVal(it); if(v === null) continue; (used[v.toLowerCase()] = used[v.toLowerCase()] || []).push(it); }
-  for(const k in used){ const l = used[k]; if(l.length > 1 && new Set(l.map(i => i.cmd)).size > 1) w.push(`Клавиша ${k.toUpperCase()} назначена несколько раз: ${l.map(i => i.n.replace(/^Клавиша: |^Клавиша /, "")).join(", ")}. Сработает последняя строка.`); }
-  const sized = ["clen", "cthick", "cgap"].some(id => cbVal(cbById[id]) !== null);
-  if(sized && cbVal(cbById.cheight) === null) w.push("Размеры прицела записаны без высоты экрана: игра считает их от 1080. Добавь «Высота экрана для размеров».");
-  const ra = cbVal(cbById.rtog); if(ra !== null && cbVal(cbById.ralt) === null) w.push("Клавиша радара переключает на второй масштаб, он сейчас стандартный (1). Задай «Второй масштаб радара», если нужен другой.");
-  return w;
-}
+const cbKEY = "cs2cfg2";
+const cbS = {base:"mine", ov:{}};
+(() => { const o = store(s => JSON.parse(s.getItem(cbKEY) || "{}"), {}); if(o.base === "pro") cbS.base = "pro"; if(o.ov && typeof o.ov === "object") for(const r of CB) if(r.id in o.ov) cbS.ov[r.id] = o.ov[r.id]; })();
+const cbSave = () => store(s => s.setItem(cbKEY, JSON.stringify(cbS)));
+const cbBase = r => r[cbS.base];
+const cbVal = r => r.id in cbS.ov ? cbS.ov[r.id] : cbBase(r);
 function cbBuild(){
-  const out = ["// autoexec.cfg, собран в разделе «Конфиги» сайта команды.",
-    "// Куда: C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\cfg\\autoexec.cfg",
-    "// Игра выполняет файл сама при каждом запуске. Проверка: в консоли exec autoexec, внизу строка \"команда: конфиг загружен\".",
-    "// Строка в файле при каждом запуске перекрывает меню. Не согласен со строкой: удали её."];
-  const counts = {};
-  for(const g of cbGroups){
-    const rows = g.it.flatMap(cbLines); counts[g.id] = rows.length;
-    if(!rows.length) continue;
-    out.push("", `// ---------- ${g.t} ----------`);
-    for(const [t, c] of rows) out.push(cbS.com ? t.padEnd(46) + " // " + c : t);
-  }
-  out.push("", 'echo "команда: конфиг загружен"');
-  return {text: out.join("\n") + "\n", counts};
+  let t = L.cfg.own.replace(/\r\n/g, "\n");
+  for(const r of CB) t = r.apply(t, cbVal(r));
+  return t.replace(/\n{3,}/g, "\n\n");
 }
-
-/* ===== constructor: screen (compact rows; the explanation is the row's hover title) ===== */
-function cbCtl(it){
-  const v = cbVal(it), on = v !== null;
-  const menu = `<button type="button" class="seg" data-cb="${it.id}" data-v="" aria-pressed="${!on}" title="Строки нет: работает меню игры">из меню</button>`;
-  if(it.t === "opt"){
-    if(it.o.length <= 4) return `<div class="grp">${menu}${it.o.map(([x, l]) => `<button type="button" class="seg" data-cb="${it.id}" data-v="${x}" aria-pressed="${v === x}">${l.replace(/:.*$/, "")}</button>`).join("")}</div>`;
-    return `<select data-cbsel="${it.id}" aria-label="${esc(it.n)}"><option value="">из меню</option>${it.o.map(([x, l]) => `<option value="${x}" ${v === x ? "selected" : ""}>${l}</option>`).join("")}</select>`;
-  }
-  if(it.t === "num") return `<input type="number" data-cbnum="${it.id}" aria-label="${esc(it.n)}" placeholder="из меню" ${it.min !== undefined ? `min="${it.min}"` : ""} ${it.max !== undefined ? `max="${it.max}"` : ""} step="${it.step}" value="${on ? v : ""}">`;
-  if(it.t === "key") return `<select data-cbsel="${it.id}" aria-label="${esc(it.n)}"><option value="">—</option>${cbKeys.map(k => `<option value="${k}" ${v === k ? "selected" : ""}>${k.length === 1 ? k.toUpperCase() : k}</option>`).join("")}</select>`;
-  if(it.t === "color") return `<div class="grp">${menu}<button type="button" class="seg" data-cb="${it.id}" data-v="on" aria-pressed="${on}">свой</button></div><input type="color" data-cbcol="${it.id}" aria-label="${esc(it.n)}" value="${on ? v : it.def}" ${on ? "" : "disabled"}>`;
-  if(it.t === "multi") return `<div class="cb-multi">${it.cvs.map(c => `<label><input type="checkbox" data-cbm="${it.id}" value="${c[0]}" ${v && v.includes(c[0]) ? "checked" : ""}> ${c[1]}</label>`).join("")}</div>`;
-  return "";
+function cbRow(r){
+  const v = cbVal(r), chg = r.id in cbS.ov;
+  const ctl = r.t === "num"
+    ? `<input type="number" data-cbn="${r.id}" min="${r.min}" max="${r.max}" step="${r.step}" placeholder="из меню" value="${v === null ? "" : v}">`
+    : `<div class="grp">${r.o.map(([x, l]) => `<button type="button" class="seg" data-cbo="${r.id}" data-v="${x === null ? "" : x}" aria-pressed="${v === x}">${l}</button>`).join("")}</div>`;
+  return `<div class="cb-it" data-it="${r.id}"><span class="cb-n">${r.n}</span><div class="cb-c">${ctl}<button type="button" class="ib cb-rs" data-cbr="${r.id}" title="Сбросить" ${chg ? "" : "hidden"}>${icon("rotate-ccw")}</button></div></div>`;
 }
-const cbCtlFull = cbCtl;
-const cbChg = it => JSON.stringify(cbVal(it)) !== JSON.stringify(cbDefault(it));
-function cbItem(it){
-  return `<div class="cb-it${cbChg(it) ? " chg" : ""}" data-it="${it.id}"><span class="cb-n" title="${esc(it.d.replace(/<[^>]+>/g, ""))}">${it.n.replace(/^Клавиша: /, "")}</span><div class="cb-c" data-ctl="${it.id}">${cbCtl(it)}</div></div>`;
-}
-function cbGroupHtml(g){
-  return `<details class="cb-g"><summary>${g.t}</summary>${(g.pre || []).map(p => `<button type="button" class="seg" data-cbpre="${g.id}">${p.t}</button>`).join("")}${g.it.map(cbItem).join("")}</details>`;
-}
-function cbRefresh(it){ const el = page.querySelector(`[data-it="${it.id}"]`); if(el) el.classList.toggle("chg", cbChg(it)); }
-function cbOut(){
-  const pre = $("c-build"); if(!pre) return;
-  pre.textContent = cbBuild().text;
-  const box = $("cb-warn"); if(box) box.innerHTML = cbWarn().map(x => `<p class="cb-warnp">${esc(x)}</p>`).join("");
-}
+function cbPaint(){ const g = $("cb-rows"); if(g) g.innerHTML = CB.map(cbRow).join(""); const pre = $("c-build"); if(pre) pre.textContent = cbBuild(); const b = $("cb-base"); if(b) b.innerHTML = cbBaseBtns(); draw(); }
+const cbBaseBtns = () => [["mine","Мой"],["pro","Про"]].map(([k, l]) => `<button type="button" class="seg" data-cbb="${k}" aria-pressed="${cbS.base === k}">${l}</button>`).join("") +
+  (Object.keys(cbS.ov).length ? `<button type="button" class="ib cb-rs" data-cbb="${cbS.base}" title="Сбросить всё">${icon("rotate-ccw")}</button>` : "");
 
 /* ===== cs2_video.txt patcher ===== */
 /* [key in the file without "setting.", Russian name, menu name, options [value, label]] */
@@ -1286,54 +1105,33 @@ function cbVideoBody(){
 }
 const cbVideoPaint = () => { const e = $("cb-video"); if(e){ e.innerHTML = cbVideoBody(); draw(); } };
 
-/* ===== events (the section's own; the page click handler already does data-copy and data-save) ===== */
-const cbIn = e => V.view === "cfg" && e.target.closest("[data-cb],[data-cbpre],[data-cbreset],[data-vtier],[data-vdl],[data-cbnum],[data-cbsel],[data-cbcol],[data-cbm],[data-cbcom],[data-cbdpi],[data-vk],#cb-file");
+/* ===== events (the page click handler already does data-copy and data-save) ===== */
+function cbSet(r, v){ if(JSON.stringify(v) === JSON.stringify(cbBase(r))) delete cbS.ov[r.id]; else cbS.ov[r.id] = v; cbSave(); }
+const cbById = id => CB.find(r => r.id === id);
 page.addEventListener("click", e => {
   if(V.view !== "cfg") return;
   const b = e.target.closest("button"); if(!b) return;
-  if(b.dataset.cb !== undefined){
-    const it = cbById[b.dataset.cb], v = b.dataset.v;
-    if(v === "") cbSet(it, null);
-    else if(v === "on") cbSet(it, it.def);
-    else cbSet(it, v);
-    page.querySelector(`[data-ctl="${it.id}"]`).innerHTML = cbCtlFull(it);
-    cbRefresh(it); cbOut(); return;
-  }
-  if(b.dataset.cbpre !== undefined){
-    const g = cbGroups.find(x => x.id === b.dataset.cbpre);
-    for(const id in g.pre[0].v) cbSet(cbById[id], g.pre[0].v[id]);
-    g.it.forEach(it => { const c = page.querySelector(`[data-ctl="${it.id}"]`); if(c){ c.innerHTML = cbCtlFull(it); cbRefresh(it); } }); cbOut(); return;
-  }
-  if(b.dataset.cbreset !== undefined){
-    cbS.ov = {}; cbSave(); $("cb-groups").innerHTML = cbGroups.map(cbGroupHtml).join(""); cbOut(); return;
-  }
+  if(b.dataset.cbo){ cbSet(cbById(b.dataset.cbo), b.dataset.v || null); cbPaint(); return; }
+  if(b.dataset.cbr){ delete cbS.ov[b.dataset.cbr]; cbSave(); cbPaint(); return; }
+  if(b.dataset.cbb){ cbS.base = b.dataset.cbb; cbS.ov = {}; cbSave(); cbPaint(); return; }
+  if(b.dataset.ct !== undefined){ navigator.clipboard.writeText(b.dataset.ct).then(() => { b.classList.add("ok"); setTimeout(() => b.classList.remove("ok"), 1200); }, () => {}); return; }
   if(b.dataset.vtier !== undefined){
     const t = b.dataset.vtier; cbV.tier = t;
     if(t) cbVK.forEach(([k], i) => { cbV.sel[k] = cbTiers[t][1][i]; }); else cbV.sel = {};
     cbVideoPaint(); return;
   }
-  if(b.dataset.ct !== undefined){ navigator.clipboard.writeText(b.dataset.ct).then(() => { b.classList.add("ok"); setTimeout(() => b.classList.remove("ok"), 1200); }, () => {}); return; }
   if(b.dataset.vdl !== undefined){
     const r = cbPatch(cbV.bin, cbV.sel), bytes = Uint8Array.from(r.out, c => c.charCodeAt(0));
     const x = document.createElement("a"); x.href = URL.createObjectURL(new Blob([bytes], {type:"text/plain"})); x.download = "cs2_video.txt"; x.click(); setTimeout(() => URL.revokeObjectURL(x.href), 1000);
   }
 });
-page.addEventListener("input", e => {
-  if(!cbIn(e)) return;
-  const t = e.target;
-  if(t.dataset.cbnum){ const it = cbById[t.dataset.cbnum], v = t.value === "" ? null : t.value; if(cbValid(it, v)){ cbSet(it, v); t.classList.remove("bad"); cbRefresh(it); cbOut(); } else t.classList.add("bad"); }
-  else if(t.dataset.cbcol){ const it = cbById[t.dataset.cbcol]; cbSet(it, t.value); cbRefresh(it); cbOut(); }
-  else if(t.dataset.cbdpi !== undefined){ if(/^\d{2,5}$/.test(t.value)){ cbS.dpi = t.value; cbSave(); const s = page.querySelector("[data-edpi]"); if(s) s.textContent = cbEdpi(); } }
-});
 page.addEventListener("change", e => {
-  if(!cbIn(e)) return;
+  if(V.view !== "cfg") return;
   const t = e.target;
-  if(t.dataset.cbsel){ const it = cbById[t.dataset.cbsel]; cbSet(it, t.value === "" ? null : t.value); cbRefresh(it); cbOut(); }
-  else if(t.dataset.cbnum){ const it = cbById[t.dataset.cbnum]; if(!cbValid(it, t.value)){ const v = cbVal(it); t.value = v === null ? "" : v; t.classList.remove("bad"); } }
-  else if(t.dataset.cbm){ const it = cbById[t.dataset.cbm], now = [...page.querySelectorAll(`[data-cbm="${it.id}"]:checked`)].map(x => x.value); cbSet(it, now.length ? now : null); cbRefresh(it); cbOut(); }
-  else if(t.dataset.cbcom !== undefined){ cbS.com = t.checked; cbSave(); cbOut(); }
-  else if(t.dataset.vk){ cbV.sel[t.dataset.vk] = t.value; cbV.tier = ""; const n = cbPatch(cbV.bin, cbV.sel).changed.length; $("cb-vn").textContent = n ? `(${n})` : ""; page.querySelector("[data-vdl]").disabled = !n; $("cb-vtier").innerHTML = cbVideoTier(); }
-  else if(t.id === "cb-file" && t.files[0]){
+  if(t.dataset.cbn){ const r = cbById(t.dataset.cbn), n = Number(t.value);
+    if(t.value === "") cbSet(r, null); else if(isFinite(n) && n >= r.min && n <= r.max) cbSet(r, String(n)); cbPaint(); return; }
+  if(t.dataset.vk){ cbV.sel[t.dataset.vk] = t.value; cbV.tier = ""; const n = cbPatch(cbV.bin, cbV.sel).changed.length; $("cb-vn").textContent = n ? `(${n})` : ""; page.querySelector("[data-vdl]").disabled = !n; $("cb-vtier").innerHTML = cbVideoTier(); return; }
+  if(t.id === "cb-file" && t.files[0]){
     const f = t.files[0];
     if(f.size > 65536){ cbV.bin = ""; cbV.err = "Это не cs2_video.txt"; cbVideoPaint(); return; }
     f.arrayBuffer().then(buf => {
@@ -1356,25 +1154,19 @@ page.addEventListener("change", e => {
 .cp{display:flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:9px;background:var(--raise);color:var(--mute);font:500 13px ui-monospace,Consolas,monospace}
 .cp svg{width:15px;height:15px}
 .cp.ok{color:var(--he)}
-.cb-groups{display:grid;gap:8px;max-width:760px}
+.cb-rows{display:grid;max-width:640px}
+.cb-it{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 14px;padding:8px 0;border-top:1px solid var(--line)}
+.cb-c{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.cb-rs{width:30px;height:30px}
+.cb-rs svg{width:15px;height:15px}
 .cb-g{border-top:1px solid var(--line);padding-top:8px;min-width:0}
 .cb-g>summary{font:600 15px var(--display);letter-spacing:.02em;padding:4px 0}
-.cb-g>.seg{margin:6px 0}
-.cb-it{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 14px;padding:7px 0 7px 10px;border-left:3px solid transparent;min-width:0}
-.cb-it.chg{border-left-color:var(--accent)}
-.cb-n{cursor:help}
-.cb-c{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.cb-c .grp{flex-wrap:wrap;max-width:100%}
-.cb-multi{display:flex;flex-wrap:wrap;gap:6px 14px}
-.cb-multi label{display:flex;gap:6px;align-items:center}
-.cb-warnp{color:var(--molotov);margin:0}
 .cfg pre{white-space:pre;max-height:360px}
 .cfg input[type=number],.cfg select{background:var(--raise);color:var(--fg);border:1px solid var(--line);border-radius:9px;height:34px;padding:0 8px;font:inherit;max-width:100%;-webkit-user-select:text;user-select:text}
-.cfg input[type=number]{width:110px}
-.cfg input[type=number].bad{border-color:var(--molotov)}
-.cfg input[type=color]{width:52px;height:34px;padding:2px;border:1px solid var(--line);border-radius:9px;background:var(--raise)}
-.cfg select:disabled,.cfg input:disabled{opacity:.4}
+.cfg input[type=number]{width:96px}
+.cfg select:disabled{opacity:.4}
 .cfg details>summary{cursor:pointer;color:var(--mute);font-weight:600}
+.cb-warnp{color:var(--molotov);margin:0}
 .keysx{display:flex;flex-wrap:wrap;gap:8px 18px}
 .keysx span{display:flex;align-items:center;gap:6px;color:var(--mute)}
 .keysx kbd{font:700 12px/1 var(--body);color:var(--fg);background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
@@ -1386,11 +1178,11 @@ page.addEventListener("change", e => {
 function cfgView(){
   const c = L.cfg, cp = (t, ic, label, title) => `<button type="button" class="cp" data-ct="${esc(t)}" title="${title}">${icon(ic)}${label}</button>`;
   const k = (keys, t) => `<span>${keys.map(x => `<kbd>${x}</kbd>`).join("")}${t}</span>`;
-  setTimeout(cbOut, 0);
+  setTimeout(cbPaint, 0);
   return `<section class="sheet cfg">
-    <div class="cfgh"><h2>autoexec.cfg</h2><div class="acts"><button type="button" class="btn main" data-save="c-build" data-name="autoexec.cfg">${icon("download")}Скачать</button><button type="button" class="btn" data-copy="c-build">Скопировать</button></div></div>
+    <div class="cfgh"><h2>autoexec.cfg</h2><div class="grp" id="cb-base">${cbBaseBtns()}</div><div class="acts"><button type="button" class="btn main" data-save="c-build" data-name="autoexec.cfg">${icon("download")}Скачать</button><button type="button" class="btn" data-copy="c-build">Скопировать</button></div></div>
     <div class="cps">${cp("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\cfg", "folder", "…\\game\\csgo\\cfg", "Куда положить. Скопировать путь")}${cp("+exec autoexec.cfg", "rocket", "+exec autoexec.cfg", "Steam → CS2 → Свойства → Параметры запуска. Скопировать")}</div>
-    <details><summary>Настроить</summary><div class="cb-groups" id="cb-groups">${cbGroups.map(cbGroupHtml).join("")}</div><div id="cb-warn"></div><button type="button" class="seg" data-cbreset>Сбросить</button></details>
+    <div class="cb-rows" id="cb-rows"></div>
     <details><summary>Файл</summary><pre id="c-build"></pre></details></section>
   <section class="sheet cfg">
     <div class="cfgh"><h2>Графика</h2><label class="btn main filebtn">${icon("folder-open")}Открыть cs2_video.txt<input type="file" id="cb-file" accept=".txt,text/plain"></label></div>
@@ -1401,7 +1193,6 @@ function cfgView(){
     <div class="cps">${cp("exec prac", "terminal", "exec prac", "В консоли после загрузки карты. Скопировать")}</div>
     <div class="keysx">${k(["N"], "повтор")}${k(["6","7","8","9"], "гранаты")}${k(["0"], "убрать дым")}${k(["[","]"], "бот")}${k(["Caps","Alt"], "полёт")}</div>
     <pre id="c-prac" hidden>${esc(c.prac)}</pre><pre id="c-fshost" hidden>${esc(c.fshost)}</pre></section>`;
-
 }
 
 
