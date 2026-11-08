@@ -408,9 +408,12 @@ stage.addEventListener("pointermove", e => {
 const end = e => { P.delete(e.pointerId); pinch = 0; stage.classList.remove("drag"); };
 stage.addEventListener("pointerup", e => {
   if(INK.cur && e.pointerId === INK.pid){ if(INK.cur.length > 1) INK.lines.push(simplify(INK.cur, D.w/660)); INK.cur = null; inkPaint(); return; }
-  if(V.view === "board"){ if(BD.drag) boardUp(); else if(moved <= 4 && BD.tool === "select" && !e.target.closest("[data-i],.bar,.zoom,.btools,.bsteps,.card")) { BD.sel = -1; BD.info = null; paint(); } end(e); return; }
+  if(V.view === "board"){ const f = BD.fixedDown; BD.fixedDown = null;
+    if(BD.drag) boardUp();
+    else if(f){ if(moved <= 4){ if(f.ts){ BD.sel = -1; toggleInfo(objs()[f.i].id); } else { BD.sel = f.i; paint(); } } }
+    else if(moved <= 4 && BD.tool === "select" && !e.target.closest("[data-i],.bar,.zoom,.btools,.bsteps,.card")) { BD.sel = -1; BD.info = null; paint(); } end(e); return; }
   const wasDrag = moved > 4; end(e); if(wasDrag) return; const t = downT && downT.closest("[data-i],[data-c]"); if(t) pick(t); else if(!(downT && downT.closest(".bar,.zoom,.card"))){ S.sel = S.open = null; S.video = false; render(); } });
-stage.addEventListener("pointercancel", e => { if(BD.drag){ BD.drag = null; paint(); } end(e); });
+stage.addEventListener("pointercancel", e => { BD.fixedDown = null; if(BD.drag){ BD.drag = null; paint(); } end(e); });
 $("zin").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.4, r.width/2, r.height/2); };
 $("zout").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1/1.4, r.width/2, r.height/2); };
 $("zfit").onclick = fit;
@@ -800,7 +803,10 @@ function boardDown(e){
   if(BD.tool === "throw"){ BD.drag = {th: BD.th ? "second" : "first"}; if(!BD.th) BD.th = p; BD.thTo = p; cap(); paint(); return false; }
   if(h){ push(); BD.drag = {turn:+h.dataset.h}; cap(); return false; }
   if(BD.tool === "erase"){ if(i >= 0){ push(); del(i); } BD.drag = {erase:true}; cap(); return false; }
-  if(i >= 0 && (BD.tool === "select" || ["tok","foe","c4","dead","nade","ln"].includes(o.t))){
+  // a lineup from the list stands where the game has it: never moved; a click on its throw spot shows its photos, a drag pans
+  const fixed = i >= 0 && o.t === "ln" && o.ref, ts = !!e.target.closest("[data-ts]");
+  if(fixed && (ts || BD.tool === "select")){ BD.fixedDown = {i, ts}; return true; }
+  if(i >= 0 && !fixed && (BD.tool === "select" || ["tok","foe","c4","dead","nade","ln"].includes(o.t))){
     push(); if(BD.tool === "select") BD.sel = i; BD.drag = {move:i, from:p, o:clone(o), moved:false, ts:!!e.target.closest("[data-ts]")}; cap(); paint(); return false; }
   if(BD.tool === "select") return true;   // empty place: pan
   if(BD.tool === "text"){ textAt(p); return false; }
