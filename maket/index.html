@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Карта гранат S4</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: icon rail | map that fills the height | quiet side panel. On phones: bar, map, bottom sheet. */
+:root{
+  --bg:#0e1216; --panel:#151b20; --raise:#1c242b; --line:#29343d; --fg:#e7ecef; --mute:#8b98a2; --accent:#f0b443;
+  --smoke:#d7dee3; --flash:#ffe066; --molotov:#ff7b42; --he:#74d47a;
+  --display:"Oswald","Arial Narrow",sans-serif; --body:"Golos Text",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:grid;grid-template-columns:56px 1fr 340px;grid-template-rows:100%}
+.rail{display:flex;flex-direction:column;align-items:center;gap:6px;padding-block:14px;border-right:1px solid var(--line);background:var(--panel)}
+.logo{font:600 15px var(--display);letter-spacing:.06em;color:var(--accent);margin-bottom:10px}
+.ib{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;color:var(--mute);position:relative}
+.ib:hover{background:var(--raise);color:var(--fg)}
+.ib[aria-pressed=true]{background:var(--raise);color:var(--fg)}
+.ib svg{width:20px;height:20px;stroke-width:1.8}
+.tip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);white-space:nowrap;background:#000c;padding:4px 8px;border-radius:6px;font-size:12px;pointer-events:none;opacity:0;transition:opacity .12s;z-index:30}
+.ib:hover .tip,.ib:focus-visible .tip{opacity:1}
+.tip.down{left:50%;top:calc(100% + 6px);transform:translateX(-50%)}
+.stage{position:relative;overflow:hidden;touch-action:none;cursor:grab;background:radial-gradient(ellipse at 50% 45%,#141a20,var(--bg) 70%)}
+.stage.drag{cursor:grabbing}
+.world{position:absolute;left:0;top:0;transform-origin:0 0}
+.world img{display:block;width:100%;height:100%;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.world img.names{position:absolute;inset:0}
+#marks,#links{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+#links{pointer-events:none}
+.bar{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none;z-index:10}
+.grp{pointer-events:auto;display:flex;gap:2px;padding:3px;background:#151b20e6;border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(6px)}
+.grp .ib{width:34px;height:34px;border-radius:9px}
+.grp .ib img{width:16px;height:16px;object-fit:contain;opacity:.45}
+.grp .ib[aria-pressed=true] img{opacity:1}
+.seg{height:34px;padding:0 10px;border-radius:9px;font:500 13px var(--display);letter-spacing:.06em;color:var(--mute)}
+.seg[aria-pressed=true]{background:var(--raise);color:var(--fg)}
+.seg:disabled{opacity:.35;cursor:default}
+.zoom{position:absolute;right:12px;bottom:12px;z-index:10;flex-direction:column}
+.card{position:absolute;z-index:8;border-radius:10px;overflow:hidden;background:#000;border:1px solid #ffffff2e;box-shadow:0 10px 30px #0009;cursor:zoom-in}
+.card img{display:block;width:100%;height:100%;object-fit:cover}
+.card .lab{position:absolute;left:8px;top:8px;font:500 11px var(--display);letter-spacing:.1em;padding:3px 7px;border-radius:5px;background:#000b}
+.card.aim{border-color:var(--accent)}
+.card.aim .lab{color:var(--accent)}
+.card .play{position:absolute;right:8px;bottom:8px;width:34px;height:34px;border-radius:50%;background:#000c;display:grid;place-items:center;cursor:pointer}
+.card .play svg{width:16px;height:16px}
+.card video.vid{background:#000}
+.card .vid{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;background:#0b0f12;font-size:13px;color:var(--mute)}
+.cross{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);pointer-events:none}
+.side{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:20px 20px 28px;display:flex;flex-direction:column;gap:18px}
+.eyebrow{font:500 11px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+h1{font:600 26px/1.15 var(--display);letter-spacing:.01em;margin:4px 0 0;text-wrap:balance}
+h2{font:500 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 6px}
+.from{color:var(--mute);margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 9px;border-radius:7px;background:var(--raise);font-size:13px}
+.chip b{font-weight:600}
+.why{color:var(--mute);font-size:13px}
+.acts{display:flex;gap:8px}
+.btn{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:10px;background:var(--raise);font-weight:500}
+.btn.main{background:var(--accent);color:#1a1205}
+.btn svg{width:17px;height:17px}
+.list{display:flex;flex-direction:column;gap:2px}
+.row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;text-align:left;width:100%}
+.row:hover,.row.hot{background:var(--raise)}
+.row img{width:14px;height:14px;object-fit:contain;flex:none}
+.row span{min-width:0}
+.row small{display:block;color:var(--mute);font-size:12px}
+.note{font-size:12px;color:var(--mute);border-top:1px solid var(--line);padding-top:14px}
+.photos{display:none}
+.lb{position:fixed;inset:0;background:#000e;z-index:50;display:grid;place-items:center;padding:24px;cursor:zoom-out}
+.lb img{max-width:100%;max-height:100%;border-radius:8px}
+@media (max-width:760px){
+  .app{grid-template-columns:100%;grid-template-rows:auto minmax(0,1fr) auto}
+  .rail{flex-direction:row;justify-content:center;border-right:0;border-bottom:1px solid var(--line);padding:6px max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px))}
+  .logo{margin:0 10px 0 0}
+  .tip{display:none}
+  .side{border-left:0;border-top:1px solid var(--line);max-height:46vh;padding:14px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+  .card{display:none}
+  .photos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .photos figure{margin:0;position:relative;border-radius:8px;overflow:hidden}
+  .photos figure:first-child{grid-column:1/-1}
+  .photos img{display:block;width:100%}
+  .photos figcaption{position:absolute;left:6px;top:6px;font:500 10px var(--display);letter-spacing:.1em;background:#000b;padding:2px 6px;border-radius:4px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head><body>
+<div class="app">
+  <nav class="rail" aria-label="Разделы">
+    <div class="logo">S4</div>
+    <button class="ib" aria-pressed="true"><i data-lucide="map"></i><span class="tip">Карта гранат</span></button>
+    <button class="ib"><i data-lucide="layout-list"></i><span class="tip">Все раскидки</span></button>
+    <button class="ib"><i data-lucide="pen-line"></i><span class="tip">Доска</span></button>
+    <button class="ib"><i data-lucide="sliders-horizontal"></i><span class="tip">Конфиги</span></button>
+  </nav>
+
+  <main class="stage" id="stage">
+    <div class="world" id="world">
+      <img id="radar" src="assets/radar.webp" alt="Радар Mirage">
+      <img id="names" class="names" src="assets/names.webp" alt="Mirage с названиями позиций" hidden>
+    </div>
+    <svg id="links"></svg>
+    <svg id="marks"></svg>
+    <div class="bar">
+      <div class="grp" id="maps"></div>
+      <div class="grp" id="sides"></div>
+      <div class="grp" id="kinds"></div>
+      <div class="grp">
+        <button class="ib" id="layer" aria-pressed="false"><i data-lucide="tag"></i><span class="tip down">Названия позиций</span></button>
+      </div>
+    </div>
+    <div class="grp zoom">
+      <button class="ib" id="zin"><i data-lucide="plus"></i></button>
+      <button class="ib" id="zout"><i data-lucide="minus"></i></button>
+      <button class="ib" id="zfit"><i data-lucide="scan"></i></button>
+    </div>
+    <div id="cards"></div>
+  </main>
+
+  <aside class="side" id="side"></aside>
+</div>
+
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script>
+const D = {"w": 931, "h": 849, "items": [{"k": "smoke-window-insta-from-t-spawn-6", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "окно", "from": "Т спавн, точка 6", "tech": "Вперёд (W), прыжок и бросок", "mouse": "ЛКМ", "air": "7.8s", "clock": "1:55", "n": "744", "t": [821, 296], "l": [336, 379]}, {"k": "smoke-window-insta-from-t-spawn-7", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "окно", "from": "Т спавн, точка 7", "tech": "Вперёд (W), прыжок и бросок", "mouse": "ЛКМ", "air": "7.8s", "clock": "1:55", "n": "708", "t": [820, 277], "l": [337, 380]}, {"k": "smoke-window-insta-from-t-spawn-8", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "окно", "from": "Т спавн, точка 8", "tech": "Вперёд (W), прыжок и бросок", "mouse": "ЛКМ", "air": "7.7s", "clock": "1:55", "n": "720", "t": [821, 257], "l": [336, 381]}, {"k": "smoke-window-insta-from-t-spawn-9", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "окно", "from": "Т спавн, точка 9", "tech": "Вперёд (W), прыжок и бросок", "mouse": "ЛКМ", "air": "7.6s", "clock": "1:55", "n": "980", "t": [836, 324], "l": [339, 378]}, {"k": "smoke-window-insta-from-t-spawn-10", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "окно", "from": "Т спавн, точка 10", "tech": "Вперёд (W), прыжок и бросок", "mouse": "ЛКМ", "air": "6.8s", "clock": "1:55", "n": "1,224", "t": [837, 247], "l": [342, 384]}, {"k": "smoke-top-mid-insta-from-t-spawn-5", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "топ мид", "from": "Т спавн, точка 5", "tech": "Прыжок и бросок", "mouse": "ЛКМ + ПКМ", "air": "6.1s", "clock": "1:55", "n": "427", "t": [821, 315], "l": [587, 341]}, {"k": "smoke-top-mid-insta-from-t-spawn-8", "kind": "smoke", "side": "t", "cat": "Инсты со спавна", "why": "Кидает тот, кто встал на нужную точку. Окно: точки 6–10, почти всегда хоть один игрок на одной из них. Топ мид: точки 5 и 8.", "to": "топ мид", "from": "Т спавн, точка 8", "tech": "Стоя", "mouse": "ЛКМ", "air": "5.5s", "clock": "1:55", "n": "212", "t": [821, 257], "l": [566, 352]}, {"k": "smoke-top-mid-from-t-spawn-t-6", "kind": "smoke", "side": "t", "cat": "Мид в начале раунда", "why": "Без инсты: смоки на топ мид и коннектор с Т спавна. Смок в окно с топ мида идёт позже, около 1:17.", "to": "топ мид", "from": "Т спавн", "tech": "Стоя", "mouse": "ЛКМ", "air": "4.4s", "clock": "1:53", "n": "941", "t": [863, 246], "l": [585, 349]}, {"k": "smoke-connector-from-t-spawn-jump-throw", "kind": "smoke", "side": "t", "cat": "Мид в начале раунда", "why": "Без инсты: смоки на топ мид и коннектор с Т спавна. Смок в окно с топ мида идёт позже, около 1:17.", "to": "коннектор", "from": "Т спавн", "tech": "Прыжок и бросок", "mouse": "ЛКМ", "air": "5.7s", "clock": "1:47", "n": "623", "t": [863, 246], "l": [454, 431]}, {"k": "smoke-window-from-top-mid", "kind": "smoke", "side": "t", "cat": "Мид в начале раунда", "why": "Без инсты: смоки на топ мид и коннектор с Т спавна. Смок в окно с топ мида идёт позже, около 1:17.", "to": "окно", "from": "топ мид", "tech": "На бегу", "mouse": "ЛКМ", "air": "2.9s", "clock": "1:17", "n": "734", "t": [664, 380], "l": [353, 378]}, {"k": "smoke-stairs-from-t-spawn", "kind": "smoke", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "голова", "from": "Т спавн", "tech": "Прыжок и бросок", "mouse": "ЛКМ", "air": "9.4s", "clock": "1:19", "n": "263", "t": [826, 479], "l": [474, 563]}, {"k": "smoke-ct-from-ramp-jump-throw-3", "kind": "smoke", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "КТ спавн", "from": "яма", "tech": "Прыжок и бросок", "mouse": "ЛКМ", "air": "5.4s", "clock": "1:28", "n": "167", "t": [797, 456], "l": [400, 740]}, {"k": "smoke-jungle-from-t-roof-jump-throw", "kind": "smoke", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "джангл", "from": "раскидка", "tech": "Прыжок и бросок", "mouse": "ЛКМ", "air": "7.1s", "clock": "1:20", "n": "500", "t": [779, 496], "l": [446, 580]}, {"k": "molotov-balcony-from-palace", "kind": "molotov", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "балкон", "from": "палас", "tech": "На бегу", "mouse": "ЛКМ", "air": "1.5s", "clock": "1:22", "n": "176", "t": [706, 702], "l": [595, 667]}, {"k": "molotov-under-palace-from-palace", "kind": "molotov", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "под паласом", "from": "палас", "tech": "Стоя", "mouse": "ЛКМ", "air": "1.2s", "clock": "1:07", "n": "382", "t": [584, 722], "l": [607, 638]}, {"k": "molotov-sandwich-from-t-roof", "kind": "molotov", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "сэндвич", "from": "раскидка", "tech": "Стоя", "mouse": "ЛКМ", "air": "2.0s", "clock": "1:22", "n": "138", "t": [746, 505], "l": [510, 569]}, {"k": "flash-a-site-from-palace-t", "kind": "flash", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "плент А", "from": "палас", "tech": "Стоя", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:21", "n": "65", "t": [652, 685], "l": [576, 682]}, {"k": "flash-ramp-lamp-from-ramp", "kind": "flash", "side": "t", "cat": "Выход на А", "why": "Смок на голову первым, через полсекунды на КТ, через 2 секунды на джангл. Через 4–7 секунд молики на балкон, под палас и на сэндвич. Последними флешки на плент.", "to": "яма", "from": "яма", "tech": "Стоя", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:21", "n": "567", "t": [746, 461], "l": [606, 540]}, {"k": "smoke-b-short-from-house", "kind": "smoke", "side": "t", "cat": "Выход на Б", "why": "Смок на шорт первым, через полсекунды смок на окно кухни. Флешка на ближний угол через 2–3 секунды, затем молики на плент и скамью.", "to": "шорт", "from": "дом", "tech": "Стоя", "mouse": "ЛКМ", "air": "6.4s", "clock": "1:26", "n": "24", "t": [546, 76], "l": [335, 208]}, {"k": "smoke-market-window-from-b-apartments-jump-throw", "kind": "smoke", "side": "t", "cat": "Выход на Б", "why": "Смок на шорт первым, через полсекунды смок на окно кухни. Флешка на ближний угол через 2–3 секунды, затем молики на плент и скамью.", "to": "окно кухни", "from": "апартаменты", "tech": "Прыжок и бросок", "mouse": "ЛКМ", "air": "5.3s", "clock": "1:19", "n": "415", "t": [546, 138], "l": [193, 323]}, {"k": "flash-b-site-close-get-right-from-back-alley", "kind": "flash", "side": "t", "cat": "Выход на Б", "why": "Смок на шорт первым, через полсекунды смок на окно кухни. Флешка на ближний угол через 2–3 секунды, затем молики на плент и скамью.", "to": "ближний угол Б", "from": "дом", "tech": "Прыжок и бросок", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:22", "n": "214", "t": [509, 150], "l": [292, 148]}, {"k": "molotov-b-plat-from-b-apartments", "kind": "molotov", "side": "t", "cat": "Выход на Б", "why": "Смок на шорт первым, через полсекунды смок на окно кухни. Флешка на ближний угол через 2–3 секунды, затем молики на плент и скамью.", "to": "плент Б", "from": "апартаменты", "tech": "Стоя", "mouse": "ЛКМ", "air": "1.4s", "clock": "1:07", "n": "284", "t": [344, 123], "l": [163, 96]}, {"k": "molotov-b-bench-from-b-apartments-run-throw", "kind": "molotov", "side": "t", "cat": "Выход на Б", "why": "Смок на шорт первым, через полсекунды смок на окно кухни. Флешка на ближний угол через 2–3 секунды, затем молики на плент и скамью.", "to": "скамья на Б", "from": "апартаменты", "tech": "На бегу", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:01", "n": "207", "t": [296, 97], "l": [64, 190]}, {"k": "flash-b-site-from-b-apartments-crouch-throw", "kind": "flash", "side": "t", "cat": "Выход на Б", "why": "Смок на шорт первым, через полсекунды смок на окно кухни. Флешка на ближний угол через 2–3 секунды, затем молики на плент и скамью.", "to": "плент Б", "from": "апартаменты", "tech": "Сидя", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:03", "n": "545", "t": [305, 91], "l": [127, 198]}, {"k": "molotov-top-mid-from-window", "kind": "molotov", "side": "ct", "cat": "Мид в начале раунда", "why": "Молик на топ мид из окна, хаешка ломает окно, смок на коннектор, флешка на мид.", "to": "топ мид", "from": "окно", "tech": "На бегу", "mouse": "ЛКМ", "air": "2.0s", "clock": "1:45", "n": "2,254", "t": [348, 386], "l": [669, 383]}, {"k": "he-window-break-from-vent", "kind": "he", "side": "ct", "cat": "Мид в начале раунда", "why": "Молик на топ мид из окна, хаешка ломает окно, смок на коннектор, флешка на мид.", "to": "окно, ломает", "from": "вент", "tech": "Стоя", "mouse": "ПКМ", "air": "1.6s", "clock": "1:42", "n": "383", "t": [341, 345], "l": [344, 345]}, {"k": "smoke-connector-lurk-from-top-connector-2", "kind": "smoke", "side": "ct", "cat": "Мид в начале раунда", "why": "Молик на топ мид из окна, хаешка ломает окно, смок на коннектор, флешка на мид.", "to": "коннектор", "from": "верх коннектора", "tech": "Стоя", "mouse": "ЛКМ", "air": "2.6s", "clock": "1:34", "n": "510", "t": [434, 515], "l": [454, 401]}, {"k": "flash-mid-from-window-crouch-jump-throw", "kind": "flash", "side": "ct", "cat": "Мид в начале раунда", "why": "Молик на топ мид из окна, хаешка ломает окно, смок на коннектор, флешка на мид.", "to": "мид", "from": "окно", "tech": "Сидя, прыжок и бросок", "mouse": "ПКМ", "air": "1.6s", "clock": "1:24", "n": "106", "t": [328, 438], "l": [364, 382]}, {"k": "smoke-palace-from-triple", "kind": "smoke", "side": "ct", "cat": "Держим А", "why": "Смок на палас с фаербокса, хаешка на яму из джангла, смок на яму с КТ.", "to": "палас", "from": "фаербокс", "tech": "Разбег, прыжок и бросок", "mouse": "ЛКМ", "air": "4.6s", "clock": "1:42", "n": "284", "t": [431, 678], "l": [602, 715]}, {"k": "he-ramp-from-jungle-run-jump-throw", "kind": "he", "side": "ct", "cat": "Держим А", "why": "Смок на палас с фаербокса, хаешка на яму из джангла, смок на яму с КТ.", "to": "яма", "from": "джангл", "tech": "Разбег, прыжок и бросок", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:30", "n": "438", "t": [369, 559], "l": [670, 564]}, {"k": "smoke-ramp-from-ct", "kind": "smoke", "side": "ct", "cat": "Держим А", "why": "Смок на палас с фаербокса, хаешка на яму из джангла, смок на яму с КТ.", "to": "яма", "from": "КТ спавн", "tech": "Стоя", "mouse": "ЛКМ", "air": "3.5s", "clock": "1:17", "n": "330", "t": [391, 718], "l": [635, 556]}, {"k": "molotov-kitchen-from-b-default", "kind": "molotov", "side": "ct", "cat": "Держим Б", "why": "Молик и хаешка на кухню с дефолта, флешка на апартаменты из окна кухни.", "to": "кухня", "from": "дефолт Б", "tech": "Разбег, прыжок и бросок", "mouse": "ЛКМ", "air": "1.8s", "clock": "1:44", "n": "196", "t": [180, 162], "l": [378, 138]}, {"k": "he-kitchen-from-b-default", "kind": "he", "side": "ct", "cat": "Держим Б", "why": "Молик и хаешка на кухню с дефолта, флешка на апартаменты из окна кухни.", "to": "кухня", "from": "дефолт Б", "tech": "Вперёд (W), прыжок и бросок", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:38", "n": "101", "t": [184, 159], "l": [373, 135]}, {"k": "flash-b-apartments-from-market-window-ct", "kind": "flash", "side": "ct", "cat": "Держим Б", "why": "Молик и хаешка на кухню с дефолта, флешка на апартаменты из окна кухни.", "to": "апартаменты", "from": "окно кухни", "tech": "Стоя", "mouse": "ЛКМ", "air": "1.6s", "clock": "1:19", "n": "86", "t": [178, 303], "l": [227, 111]}], "ni": {"smoke": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9IiNlOGVjZWYiIHZpZXdCb3g9IjAgMCAxMC41MDEgMjQuMDI2Ij4KIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDE1LjA3OCAtMTg2LjgpIj4KICA8ZyB0cmFuc2Zvcm09Im1hdHJpeCguMjAzODYgMCAwIC4yMDM4NiAtMjAuNDQ2IDE4NS4xMSkiID4KICAgPHBhdGggZD0ibTQwLjM4MiAyNS4xOTFjLTAuMzI1IDAuNTI2IDAuMzU2IDEuOTY1IDEuNTEzIDMuMTk3IDEuNjU2IDEuNzYzIDIuMTA1IDMuNTE4IDIuMTA1IDguMjI2IDAgMy4zMjMtMC41MzQgNi41Mi0xLjIgNy4xODYtMC42NiAwLjY2LTMuMTYgMS4yLTUuNTU1IDEuMmgtNC4zNTVsMC42MSA5LjUgNSAxLjMxYzUuNTk2IDEuNDY2IDIyLjI1NCAxLjA0OCAyNi42ODMtMC42NjkgMi4wMzQtMC43ODkgMi43NjEtMS44MzggMy4wMDctNC4zNDEgMC4xNzgtMS44MTUgMC42NjYgNy42NDMgMS4wODQgMjEuMDE4czAuNTAxIDI0LjczNyAwLjE4NCAyNS4yNS0wLjA4NSAwLjkzMiAwLjUxNCAwLjkzMmMwLjYgMCAxLjMxMS0wLjU3NSAxLjU4MS0xLjI3OCAwLjI3LTAuNzAyIDAuMTAzLTEyLjk2NS0wLjM3LTI3LjI1LTAuNDkyLTE0Ljg0NS0wLjQ4NS0yNi40NjQgMC4wMTYtMjcuMTIgMi44NTItMy43MzUgMS4wNDktMTAuNjMyLTMuMjgtMTIuNTQ4LTEuNjA2LTAuNzExLTIuOTE5LTEuNjMyLTIuOTE5LTIuMDQ4cy0wLjYyNy0wLjc1Ni0xLjM5My0wLjc1Ni0xLjY1OS0wLjY5My0xLjk4NC0xLjU0Yy0wLjQ4NC0xLjI2MS0yLjQxMi0xLjUxMi0xMC42MjEtMS4zODMtNS41MTYgMC4wODYtMTAuMjk1IDAuNTg4LTEwLjYyIDEuMTE0bTI0LjYxOCA3LjE4N2MwIDAuNzU4IDAuNzIyIDMuMTA2IDEuNjA0IDUuMjE3IDEuNTEzIDMuNjIxIDEuNjg0IDMuNzMxIDMgMS45MzEgMS43ODYtMi40NDEgMS43NTctMy41NjYtMC4xNjEtNi4zMDMtMS43MjktMi40NjktNC40NDMtMi45ODUtNC40NDMtMC44NDVtLTcuODIgOC44NzJjMC4zMzggMi4zNzMgNC4zMDIgMy41NDYgNy42NDggMi4yNjMgMS40MjYtMC41NDggMS4zMDktMC45MDYtMC44MzUtMi41NTMtMS4zNzEtMS4wNTMtMy41MzctMS45MjYtNC44MTMtMS45MzgtMS44MzgtMC4wMTctMi4yNTMgMC40NDUtMiAyLjIyOG00LjMyIDIwLjQxNWMtNS43OTUgMS4zNTYtMTkuMDQ2IDEuMjEtMjUuNzUtMC4yODVsLTIuNzUtMC42MTN2MzIuMjgzbDIuNzUgMS4xODVjMy41NjEgMS41MzYgMjUuODIyIDEuNTEyIDI5LjUtMC4wMzFsMi43NS0xLjE1NHYtMTYuNTI1YzAtOS4wODktMC4xMTItMTYuNDY2LTAuMjUtMTYuMzk1LTAuMTM4IDAuMDcyLTIuOTUgMC43NjItNi4yNSAxLjUzNW0wIDM5LjEyYy01Ljc2OSAxLjIzNS0xOS4zNjMgMS4wMTctMjUuNzk2LTAuNDE0bC0yLjc5Ny0wLjYyMiAwLjI5NyA3LjM3NiAwLjI5NiA3LjM3NSAxNi43NzIgMC4yNzRjMTMuNDg4IDAuMjIxIDE2Ljg3NSA2ZS0zIDE3LjI5OS0xLjA5OSAwLjI5LTAuNzU1IDAuMzkzLTQuMjU0IDAuMjI4LTcuNzc0bC0wLjI5OS02LjQwMS02IDEuMjg1IiBmaWxsLXJ1bGU9ImV2ZW5vZGQiLz4KICA8L2c+CiA8L2c+Cjwvc3ZnPgo=", "molotov": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9IiNmZjhhMmEiICAgdmlld0JveD0iMCAwIDEwMCAxMzAiPgoJPHBhdGggZD0iTSA3MC4yODkgMjUuODQwIEMgNjkuMzA1IDI2Ljg1MiwgNjcuNzEzIDI3Ljk2MywgNjYuNzUwIDI4LjMwOSBDIDY1Ljc4NyAyOC42NTQsIDY1IDI5LjYxOCwgNjUgMzAuNDQ5IEMgNjUgMzEuMjgxLCA2Mi40MjIgMzUuOTk4LCA1OS4yNzAgNDAuOTMyIEMgNTQuMjk1IDQ4LjcyMiwgNTIuOTYyIDUwLjEyNSwgNDkuMTUyIDUxLjU4MCBMIDQ0Ljc2NCA1My4yNTUgMzIuODQ1IDc3LjgxOCBDIDI2LjI5MCA5MS4zMjgsIDIxLjA2MCAxMDMuMDc0LCAyMS4yMjMgMTAzLjkyMSBDIDIxLjQ5NyAxMDUuMzQyLCAzOS4xMTQgMTE0Ljg5NywgNDEuNTkyIDExNC45NjggQyA0Mi4xOTMgMTE0Ljk4NiwgNDguMjExIDEwMy42MzcsIDU0Ljk2NSA4OS43NTAgTCA2Ny4yNDYgNjQuNTAwIDY2LjA3OSA1OS45MzggQyA2NS4wMTAgNTUuNzYwLCA2NS4xNjggNTQuNjY1LCA2Ny45NjEgNDYuOTM4IEMgNjkuNjM4IDQyLjI5NywgNzEuNjgzIDM3LjMwNiwgNzIuNTA1IDM1Ljg0NiBDIDczLjMyNyAzNC4zODYsIDc0IDMyLjIyMiwgNzQgMzEuMDM3IEMgNzQgMjkuODUyLCA3NC40NTAgMjkuMTYwLCA3NSAyOS41MDAgQyA3Ny4zMzggMzAuOTQ1LCA3NS45OTAgMzguOTgzLCA3MiA0Ny4zODEgQyA2Ny45MjcgNTUuOTUzLCA2Ny4yMzUgNTkuODU3LCA2OC45NzUgNjQuNDM1IEMgNzAuMjM4IDY3Ljc1NSwgNzQuMzU1IDY3LjkzMCwgNzYuNDAyIDY0Ljc1MCBDIDc5LjcwMiA1OS42MjQsIDgyIDUwLjExMSwgODIgNDEuNTc5IEMgODIgMzMuMjE0LCA4MS4wMjAgMjkuMTg1LCA3OC4xNTIgMjUuNzUwIEMgNzYuMjUxIDIzLjQ3NCwgNzIuNTQ4IDIzLjUxNiwgNzAuMjg5IDI1Ljg0MCIgc3Ryb2tlPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiLz4KPC9zdmc+", "flash": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9IiNmZmYzNmIiIHZpZXdCb3g9IjAgMCAyOC40NjQgMzMuNjIyIj4KIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKC05Ni4wMTcgLTEzNC4yNCkiPgogIDxwYXRoIGZpbGwtb3BhY2l0eT0iMC40IiBkPSJtMTA3LjI0IDE1NC4yMS0xMC40MjQgNS42MTI3IDcuMzQ5OS05Ljg4OS04LjE1MTctMi41MzkxIDguNDE5LTEuNDAzMi01LjY3OTUtMTEuMDkyIDEwLjAyMyA3LjQ4MzYgMi41MzkxLTguMTUxNyAxLjQwMzIgOC4zNTIyIDEwLjg5MS01LjQ3OS03LjIxNjMgOS44ODkgOC4wODQ5IDIuNzM5NS04LjYxOTQgMS4yNjk1IDUuNjc5NSAxMC45NTgtMTEuNjI2LTguODE5OXoiLz4KICA8cGF0aCBkPSJtMTA3LjY2IDE2Ny43NmMtMS44MjAxLTAuNDUzMjItMi4xODMyLTEuMzUxMi0xLjEyNS0yLjc4MjUgMC41NzgwNC0wLjc4MTg0IDAuNTk0NjItMC45ODIzNyAwLjU4ODYxLTcuMTE4OC02ZS0zIC02LjE1ODYtMC4wMjA3LTYuMzI5OC0wLjU5NDgtNi45NDA5LTEuMTE1Mi0xLjE4NzEtMC40NzkxOC0zLjEwNiAxLjAyOTUtMy4xMDYgMC41Mjg0NCAwIDAuNzYzMTgtMC41MjY5MyAwLjc2MzE4LTEuNzEzMSAwLTAuNTM0NjgtMC4xNTQ2Ni0wLjkzNTQ1LTAuMzk2ODctMS4wMjg0LTAuNjI1NjktMC4yNDAxLTAuNDYzNDQtMC45NTA0NSAwLjI4MTgxLTEuMjMzOCAwLjM3MzI3LTAuMTQxOTIgMS4zMjU4LTAuMjU4MDMgMi4xMTY3LTAuMjU4MDMgMS40MjE0IDAgMS40MzgtOWUtMyAxLjQzOC0wLjc5Mzc1IDAtMC41MjkxNyAwLjEzMjI5LTAuNzkzNzUgMC4zOTY4Ny0wLjc5Mzc1IDAuMjE4MjggMCAwLjM5Njk3IDAuMjA4MzYgMC4zOTcwOSAwLjQ2MzAyIDIuOWUtNCAwLjYxNjYzIDEuMjQ3NCAzLjIxNSAyLjYwNTQgNS40Mjg2bDEuMDk4NiAxLjc5MDZ2NS41NDIzYzAgNS4yMDg3LTAuMDMwOCA1LjU1ODgtMC41MTE3NyA1LjgxNjItMC4yODE0NyAwLjE1MDY0LTAuNjY4NDMgMC4yNjQ0OS0wLjg1OTkgMC4yNTMtMC4xOTE0Ni0wLjAxMTUtMC4wMjA3LTAuMTQwNDcgMC4zNzk0OS0wLjI4NjYzbDAuNzI3Ni0wLjI2NTc1di0xMC42ODhsLTEuNTg3NS0xLjU3MDljLTEuMDQyMy0xLjAzMTQtMS41ODc1LTEuNDE4LTEuNTg3NS0xLjEyNTUgMCAwLjI0NDk5IDAuMjM4MTIgMC41NzI4NyAwLjUyOTE3IDAuNzI4NjMgMC42NTM2OCAwLjM0OTg0IDAuNzE5MjQgMS44NDUyIDAuMTIwOTQgMi43NTgzLTAuNDczODUgMC43MjMxOC0wLjcxMjYgMy45ODU1LTAuNjk2ODIgOS41MjE1IDllLTMgMy4yOTY5IDAuMDY3NiAzLjc1OCAwLjU1Nzc3IDQuNDIxMSAwLjY0MzgzIDAuODcwODMgMC43MTQyNiAyLjE0NTggMC4xNDQ2NSAyLjYxODUtMC40MTA2MyAwLjM0MDc5LTQuODA0MSAwLjYxNjAzLTUuODE1MSAwLjM2NDN6Ii8+CiA8L2c+Cjwvc3ZnPgo=", "he": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9IiM5YmU4NmEiIHZpZXdCb3g9IjAgMCAxNC45OCAxOS42ODMiPgogPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTk3LjU4NyAtMTY0LjAzKSI+CiAgPGcgdHJhbnNmb3JtPSJtYXRyaXgoLjIyMjEgMCAwIC4yMjIxIDkzLjY4MiAxNTcuNDMpIj4KICAgPHBhdGggZD0ibTU4IDM3Ljg4MWMwIDAuNDg0LTQuMzI4IDEuMDctOS42MTggMS4zMDEtOC4wMDkgMC4zNS05Ljg1MiAwLjc0LTExLjAxNCAyLjMyOS0xLjgwNiAyLjQ3MS0xLjMwNCAzLjc5NiAxLjcwNiA0LjUwNCAyLjI3MyAwLjUzNCAyLjQ3MSAxLjEzNCAzLjE0NiA5LjUyOCAwLjM5NyA0LjkyNiAwLjU0NSA5LjQ2MyAwLjMzIDEwLjA4Mi0wLjIxNSAwLjYxOC0yLjQxOSAxLjQyOC00Ljg5NyAxLjgtOS40NTQgMS40MTctMTQuNjUzIDcuODI4LTE0LjY1MyAxOC4wNjYgMCAxMS43MiAzLjk0MiAxOC44NjYgMTIuNzk4IDIzLjE5OCA0LjY0NyAyLjI3NCA2Ljg1NiAyLjcxMSAxMy43MDIgMi43MTEgMTMuNzIxIDAgMjEuNzA4LTUuMTk5IDI1LjU4Ni0xNi42NTRsMS42MjMtNC43OTUgMC42ODkgOS4xMmMwLjQ4MiA2LjM5MiAwLjM0IDkuNTQtMC40NzcgMTAuNTI1LTAuNjg2IDAuODI1LTAuNzU0IDEuNDA0LTAuMTY2IDEuNDA0IDIuOTQ0IDAgMy4zMjUtMi44OTYgMi40NTEtMTguNjU0bC0wLjg3OS0xNS44NDYtNy42Mi0xN2MtMTAuMzIxLTIzLjAyNi0xMC4wNDUtMjIuNDgzLTExLjQ1Ny0yMi40OTItMC42ODctNGUtMyAtMS4yNSAwLjM4OC0xLjI1IDAuODczbS0xLjgxNyAyNS4yNDFjMC4zMDEgMy4wNjcgMC42MjEgMy4zIDYuMjc5IDQuNTggNi40MzEgMS40NTQgMTAuMDE5IDQuMDU3IDEyLjEyNiA4Ljc5OCAwLjczNCAxLjY1IDEuMzUgMi4zMjUgMS4zNjkgMS41cy0yLjEwMS01LjEtNC43MTEtOS41bC00Ljc0Ni04LTUuMzE3LTAuMzA1LTUuMzE4LTAuMzA0IDAuMzE4IDMuMjMxIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiLz4KICA8L2c+CiA8L2c+Cjwvc3ZnPgo="}};
+const KIND = {smoke:"Смок", flash:"Флешка", molotov:"Молотов", he:"HE"};
+const MAPS = ["Dust 2","Mirage","Inferno","Nuke","Ancient","Anubis","Cache"];
+const S = {side:"t", kinds:new Set(Object.keys(KIND)), names:false, sel:null, open:null, hot:null, z:1, x:0, y:0, video:false};
+const $ = id => document.getElementById(id);
+const stage = $("stage"), world = $("world"), marks = $("marks"), links = $("links"), cards = $("cards"), side = $("side");
+const col = k => getComputedStyle(document.documentElement).getPropertyValue("--"+k).trim();
+const icon = (n, cls="") => `<i data-lucide="${n}" class="${cls}"></i>`;
+const draw = () => window.lucide && lucide.createIcons();
+
+// toolbar
+$("maps").innerHTML = MAPS.map(m => `<button class="seg" ${m==="Mirage"?'aria-pressed="true"':'disabled title="В макете только Mirage"'}>${m}</button>`).join("");
+const sideBtns = () => { $("sides").innerHTML = [["all","Все"],["t","T"],["ct","CT"]].map(([v,l]) => `<button class="seg" data-v="${v}" aria-pressed="${S.side===v}">${l}</button>`).join(""); };
+const kindBtns = () => { $("kinds").innerHTML = Object.keys(KIND).map(k => `<button class="ib" data-k="${k}" aria-pressed="${S.kinds.has(k)}"><img src="${D.ni[k]}" alt=""><span class="tip down">${KIND[k]}</span></button>`).join(""); };
+$("sides").onclick = e => { const b = e.target.closest("[data-v]"); if(!b) return; S.side = b.dataset.v; S.sel = S.open = null; sideBtns(); render(); };
+$("kinds").onclick = e => { const b = e.target.closest("[data-k]"); if(!b) return; const k = b.dataset.k; S.kinds.has(k) ? S.kinds.delete(k) : S.kinds.add(k); if(!S.kinds.size) S.kinds.add(k); S.sel = S.open = null; kindBtns(); render(); };
+$("layer").onclick = () => { S.names = !S.names; $("layer").setAttribute("aria-pressed", S.names); $("names").hidden = !S.names; };
+
+// view: fit, pan, zoom
+let base = 1;
+function fit(){ const r = stage.getBoundingClientRect(); base = Math.min(r.width / D.w, (r.height - 8) / D.h); S.z = 1; S.x = (r.width - D.w*base)/2; S.y = (r.height - D.h*base)/2 + 4; apply(); }
+function apply(){ world.style.width = D.w*base+"px"; world.style.height = D.h*base+"px"; world.style.transform = `translate(${S.x}px,${S.y}px) scale(${S.z})`; render(); }
+const scr = ([x,y]) => [S.x + x*base*S.z, S.y + y*base*S.z];
+function zoomAt(f, cx, cy){ const z = Math.min(6, Math.max(1, S.z*f)); f = z/S.z; S.x = cx - (cx - S.x)*f; S.y = cy - (cy - S.y)*f; S.z = z; apply(); }
+stage.addEventListener("wheel", e => { e.preventDefault(); const r = stage.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1/1.15, e.clientX - r.left, e.clientY - r.top); }, {passive:false});
+const P = new Map(); let moved = 0, pinch = 0;
+let downT = null;
+stage.addEventListener("pointerdown", e => { downT = e.target; if(e.target.closest(".bar,.zoom,.card")) return; P.set(e.pointerId, [e.clientX, e.clientY]); moved = 0; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener("pointermove", e => {
+  if(!P.has(e.pointerId)) return; const [px,py] = P.get(e.pointerId); P.set(e.pointerId, [e.clientX, e.clientY]);
+  if(P.size === 2){ const [a,b] = [...P.values()]; const d = Math.hypot(a[0]-b[0], a[1]-b[1]); if(pinch){ const r = stage.getBoundingClientRect(); zoomAt(d/pinch, (a[0]+b[0])/2 - r.left, (a[1]+b[1])/2 - r.top); } pinch = d; moved = 99; return; }
+  moved += Math.abs(e.clientX-px) + Math.abs(e.clientY-py); if(moved > 4){ stage.classList.add("drag"); S.x += e.clientX-px; S.y += e.clientY-py; apply(); }
+});
+const end = e => { P.delete(e.pointerId); pinch = 0; stage.classList.remove("drag"); };
+stage.addEventListener("pointerup", e => { const wasDrag = moved > 4; end(e); if(wasDrag) return; const t = downT && downT.closest("[data-i],[data-c]"); if(t) pick(t); else if(!(downT && downT.closest(".bar,.zoom,.card"))){ S.sel = S.open = null; S.video = false; render(); } });
+stage.addEventListener("pointercancel", end);
+$("zin").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.4, r.width/2, r.height/2); };
+$("zout").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1/1.4, r.width/2, r.height/2); };
+$("zfit").onclick = fit;
+addEventListener("resize", fit);
+addEventListener("keydown", e => { if(e.key === "Escape"){ S.sel = S.open = null; S.video = false; render(); } });
+
+// data views
+const shown = () => D.items.map((it,i) => ({...it, i})).filter(it => (S.side === "all" || it.side === S.side) && S.kinds.has(it.kind));
+function clusters(list){ const out = []; for(const it of list){ const c = out.find(c => Math.hypot(c.t[0]-it.t[0], c.t[1]-it.t[1]) < 9); if(c) c.m.push(it); else out.push({t:it.t, m:[it]}); } return out; }
+function pick(el){
+  if(el.dataset.c !== undefined){ const c = +el.dataset.c; S.open = S.open === c ? null : c; S.sel = null; S.video = false; }
+  else { S.sel = +el.dataset.i; S.video = false; }
+  render();
+}
+function marker(it, x, y, dim, on){
+  const c = col(it.kind), r = on ? 15 : 12;
+  return `<g data-i="${it.i}" style="cursor:pointer;opacity:${dim?.28:1}"><circle cx="${x}" cy="${y}" r="${r+6}" fill="transparent"/>
+    <circle cx="${x}" cy="${y}" r="${r}" fill="#0e1216" stroke="${c}" stroke-width="${on?3:2}"/>
+    <image href="${D.ni[it.kind]}" x="${x-r*.55}" y="${y-r*.62}" width="${r*1.1}" height="${r*1.24}"/></g>`;
+}
+function render(){
+  const list = shown(), cl = clusters(list), sel = S.sel !== null ? D.items[S.sel] : null;
+  let m = "", l = "";
+  cl.forEach((c, ci) => {
+    const [x,y] = scr(c.t), inSel = sel && c.m.some(it => it.i === S.sel), dim = (S.open !== null && S.open !== ci) || (sel && !inSel);
+    if(c.m.length === 1){ m += marker(c.m[0], x, y, dim, inSel); return; }
+    if(S.open === ci || inSel){
+      const n = c.m.length, R = 30 + n*2;
+      m += `<circle cx="${x}" cy="${y}" r="5" fill="#e7ecef"/>`;
+      c.m.forEach((it, k) => { const a = -Math.PI/2 + k*2*Math.PI/n, px = x + R*Math.cos(a), py = y + R*Math.sin(a);
+        m += `<line x1="${x}" y1="${y}" x2="${px}" y2="${py}" stroke="#e7ecef55" stroke-width="1.5"/>` + marker(it, px, py, sel && it.i !== S.sel, it.i === S.sel); });
+      return;
+    }
+    const kinds = [...new Set(c.m.map(it => it.kind))];
+    m += `<g data-c="${ci}" style="cursor:pointer;opacity:${dim?.28:1}"><circle cx="${x}" cy="${y}" r="20" fill="transparent"/>
+      <circle cx="${x}" cy="${y}" r="13" fill="#0e1216" stroke="#e7ecef" stroke-width="2"/>
+      <image href="${D.ni[kinds[0]]}" x="${x-7}" y="${y-8}" width="14" height="16"/>
+      <circle cx="${x+11}" cy="${y-11}" r="8.5" fill="#f0b443"/><text x="${x+11}" y="${y-7.5}" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1205" font-family="Golos Text,sans-serif">${c.m.length}</text></g>`;
+  });
+  if(sel){
+    const [ax,ay] = scr(sel.t), [bx,by] = scr(sel.l), c = col(sel.kind), ang = Math.atan2(by-ay, bx-ax);
+    l += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#000a" stroke-width="5" stroke-linecap="round"/>
+      <line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="${c}" stroke-width="2.5" stroke-dasharray="1 7" stroke-linecap="round"/>
+      <circle cx="${bx}" cy="${by}" r="18" fill="${c}" fill-opacity=".22" stroke="${c}" stroke-width="2"/>
+      <path d="M${bx-9*Math.cos(ang)-5*Math.sin(ang)},${by-9*Math.sin(ang)+5*Math.cos(ang)} L${bx},${by} L${bx-9*Math.cos(ang)+5*Math.sin(ang)},${by-9*Math.sin(ang)-5*Math.cos(ang)}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
+  }
+  marks.innerHTML = m; links.innerHTML = l; placeCards(sel); panel(sel, list);
+}
+
+// photo cards beside the throw spot and the landing spot, on the side away from the flight line
+function placeCards(sel){
+  cards.innerHTML = ""; if(!sel || innerWidth <= 760) return;
+  const r = stage.getBoundingClientRect(), [ax,ay] = scr(sel.t), [bx,by] = scr(sel.l);
+  const W = Math.min(400, r.width*0.34), w2 = W*0.62, h1 = W*9/16, h2 = w2*9/16, gap = 8, M = 12, top = 60;
+  const dx = bx-ax, dy = by-ay;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // throw group: aim on top, stand under it
+  const gw = W, gh = h1 + gap + h2;
+  let gx = dx > 0 ? ax - 34 - gw : ax + 34, gy = ay - gh/2;
+  if(gx < M || gx + gw > r.width - M) gx = dx > 0 ? ax + 34 : ax - 34 - gw;
+  gx = clamp(gx, M, r.width - M - gw); gy = clamp(gy, top, r.height - M - gh);
+  const lw = w2, lh = h2;
+  let lx = dx > 0 ? bx + 34 : bx - 34 - lw, ly = by - lh/2;
+  if(lx < M || lx + lw > r.width - M) lx = dx > 0 ? bx - 34 - lw : bx + 34;
+  lx = clamp(lx, M, r.width - M - lw); ly = clamp(ly, top, r.height - M - lh);
+  if(lx < gx + gw + 8 && lx + lw > gx - 8 && ly < gy + gh + 8 && ly + lh > gy - 8) ly = (gy + gh/2 > by) ? clamp(gy - lh - 12, top, r.height-M-lh) : clamp(gy + gh + 12, top, r.height-M-lh);
+  const k = sel.k, card = (cls, x, y, w, h, src, lab, extra="") => `<div class="card ${cls}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px" data-src="${src}"><img src="${src}" alt="${lab}"><span class="lab">${lab}</span>${extra}</div>`;
+  const vid = !S.video ? "" : sel.k === "smoke-window-insta-from-t-spawn-6" ? `<video class="vid" style="padding:0;width:100%;height:100%;object-fit:contain" src="https://assets.nades.ai/lineups/6a9f361f5473d2c665aecea6/video-720p/9de859b8cd95a2a099fd1095b94b36ca689ea7c31907c42918389c16a6e5fb81.mp4" controls autoplay muted playsinline></video>` : `<div class="vid">В макете видео есть только у смока в окно с Т спавна, точка 6.</div>`;
+  cards.innerHTML =
+    card("aim", gx, gy, W, h1, `assets/shots/${k}_aim.webp`, "КУДА ЦЕЛИТЬСЯ", `<svg class="cross" viewBox="0 0 22 22"><path d="M11 3v6M11 13v6M3 11h6M13 11h6" stroke="#5dff8a" stroke-width="2"/></svg>${vid}<button class="play" data-play title="Видео">${icon(S.video?"x":"play")}</button>`) +
+    card("", gx, gy + h1 + gap, w2, h2, `assets/shots/${k}_stand.webp`, "ГДЕ СТОЯТЬ") +
+    card("", lx, ly, lw, lh, `assets/shots/${k}_land.webp`, "КУДА ПАДАЕТ");
+  // leader lines from cards to points
+  const near = (x, y, w, h, px, py) => [clamp(px, x, x+w), clamp(py, y, y+h)];
+  const [c1x,c1y] = near(gx, gy, gw, gh, ax, ay), [c2x,c2y] = near(lx, ly, lw, lh, bx, by);
+  links.innerHTML += `<line x1="${c1x}" y1="${c1y}" x2="${ax}" y2="${ay}" stroke="#f0b443" stroke-width="1.2" stroke-dasharray="3 3"/><line x1="${c2x}" y1="${c2y}" x2="${bx}" y2="${by}" stroke="#e7ecef88" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+  draw();
+}
+cards.addEventListener("click", e => {
+  if(e.target.closest("[data-play]")){ S.video = !S.video; render(); return; }
+  const c = e.target.closest(".card"); if(!c || S.video && c.classList.contains("aim")) return;
+  const lb = document.createElement("div"); lb.className = "lb"; lb.innerHTML = `<img src="${c.dataset.src.replace("_aim","_aim")}" alt="">`; lb.onclick = () => lb.remove(); document.body.append(lb);
+});
+
+// side panel
+function panel(sel, list){
+  if(sel){
+    side.innerHTML = `<div><div class="eyebrow">${KIND[sel.kind]} · ${sel.side.toUpperCase()}</div><h1>${sel.to}</h1><div class="from">с позиции «${sel.from}»</div></div>
+      <div class="chips"><span class="chip">${sel.tech}</span><span class="chip"><b>${sel.mouse}</b></span><span class="chip">в воздухе ${sel.air.replace("s"," с")}</span><span class="chip">обычно на ${sel.clock}</span></div>
+      <div class="photos"><figure><img src="assets/shots/${sel.k}_aim.webp" alt=""><figcaption>КУДА ЦЕЛИТЬСЯ</figcaption></figure><figure><img src="assets/shots/${sel.k}_stand.webp" alt=""><figcaption>ГДЕ СТОЯТЬ</figcaption></figure><figure><img src="assets/shots/${sel.k}_land.webp" alt=""><figcaption>КУДА ПАДАЕТ</figcaption></figure></div>
+      <div class="acts"><button class="btn main" id="pv">${icon("play")}Видео</button><button class="btn" id="unstar" title="Снять отметку «учим»">${icon("star-off")}</button><button class="btn" id="close" title="Закрыть (Esc)">${icon("x")}</button></div>
+      <div><h2>${sel.cat}</h2><div class="why">${sel.why}</div></div>
+      <div class="note">${sel.n} бросков у профи за 3 месяца, по данным nades.ai.</div>`;
+    $("pv").onclick = () => { S.video = !S.video; render(); };
+    $("close").onclick = () => { S.sel = S.open = null; S.video = false; render(); };
+    $("unstar").onclick = () => {};
+  } else {
+    const cats = {}; list.forEach(it => (cats[it.cat] ||= []).push(it));
+    side.innerHTML = `<div><div class="eyebrow">Карта гранат · ${S.side === "all" ? "обе стороны" : S.side.toUpperCase()}</div><h1>Mirage</h1><div class="from">${list.length} гранат со звёздочкой «учим». Нажмите значок на карте или строку ниже.</div></div>` +
+      Object.entries(cats).map(([n, its]) => `<div><h2>${n}</h2><div class="list">${its.map(it => `<button class="row" data-i="${it.i}"><img src="${D.ni[it.kind]}" alt=""><span>${it.to}<small>с позиции «${it.from}»</small></span></button>`).join("")}</div></div>`).join("") +
+      `<div class="note">Макет: все 34 раскидки Mirage показаны как отмеченные. Точки броска и падения взяты с nades.ai, фото — те же, что в карточках.</div>`;
+  }
+  draw();
+}
+side.addEventListener("click", e => { const b = e.target.closest(".row"); if(b){ S.sel = +b.dataset.i; S.open = null; S.video = false; render(); } });
+side.addEventListener("pointerover", e => { const b = e.target.closest(".row"); marks.querySelectorAll("[data-i]").forEach(g => g.style.filter = b && g.dataset.i === b.dataset.i ? "drop-shadow(0 0 6px #f0b443)" : ""); });
+
+sideBtns(); kindBtns(); draw();
+$("radar").decode().catch(()=>{}).finally(fit);
+fit();
+</script>
+
+</body></html>
