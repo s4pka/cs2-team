@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mirage 3D</title>
+<style>
+:root{--bg:#0e1216;--panel:#151b20ee;--line:#29343d;--text:#e7ecef;--dim:#8b98a2;--acc:#f0b443;--ok:#5dff8a}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,sans-serif;overflow:hidden}
+canvas{display:block;touch-action:none}
+#ui{position:absolute;left:12px;top:12px;width:300px;max-height:calc(100% - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}
+#ui h1{font-size:16px;margin:0}
+small,.dim{color:var(--dim)}
+button,select{font:inherit;color:inherit;background:#1c242b;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+button[aria-pressed=true]{border-color:var(--acc)}
+.row{display:flex;gap:6px;flex-wrap:wrap}.row>*{flex:1}
+#go{background:var(--acc);color:#111;border-color:var(--acc);font-weight:600}
+#cmd{font:12px ui-monospace,monospace;background:#0b0f12;border:1px solid var(--line);border-radius:8px;padding:6px;word-break:break-all;cursor:pointer}
+#res{min-height:2.8em}
+#list button{display:block;width:100%;text-align:left;margin-top:4px}
+#cross{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;display:none}
+#cross:before,#cross:after{content:"";position:absolute;background:var(--ok)}
+#cross:before{left:6px;top:0;width:2px;height:14px}#cross:after{top:6px;left:0;height:2px;width:14px}
+#status{position:absolute;right:12px;bottom:12px;background:#000a;padding:6px 10px;border-radius:8px;font-size:12px;color:var(--dim);max-width:60%}
+#hide{position:absolute;right:12px;top:12px}
+@media (max-width:600px){#ui{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:46%}#status{display:none}}
+</style>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.169.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.169.0/examples/jsm/"}}</script>
+</head><body>
+<div id="ui">
+  <h1>Mirage в 3D</h1>
+  <small>Двойной клик по полу или «Встать ⊕» (точка в центре экрана) — встать туда. «Глаза» — прицелиться, ведя мышью или пальцем; с Shift медленнее. Полёт считает физика игры по сетке столкновений карты.</small>
+  <div class="row"><button id="vTop">Сверху</button><button id="vStand" title="Встать в точку в центре экрана">Встать ⊕</button><button id="vEye">Глаза</button></div>
+  <label class="dim">Как бросить</label>
+  <div class="row">
+    <select id="type"><option value="stand">Стоя</option><option value="crouch">Сидя</option><option value="jump">Прыжок</option><option value="crouchjump">Сидя + прыжок</option><option value="runjump">Разбег (W) + прыжок</option></select>
+    <select id="btn"><option value="1">ЛКМ</option><option value="0.5">ЛКМ + ПКМ</option><option value="0">ПКМ</option></select>
+  </div>
+  <button id="go">Бросить смок (F)</button>
+  <div id="res" class="dim">Встань на карту и брось.</div>
+  <div id="cmd" title="Скопировать для игры">setpos — встань на карту</div>
+  <label class="dim">Высота среза крыш</label>
+  <input id="cut" type="range" min="-10" max="20" step="0.5" value="1.6">
+  <label class="dim">Раскидки nades.ai</label>
+  <div id="list"></div>
+  <small>Сверено на 5 смоках nades.ai: 4 легли ближе 11 см от их точки, один — в 43 см. Не считаются: бросок с коротким шагом вперёд (W + прыжок), флешки и молотовы.</small>
+</div>
+<button id="hide">☰</button>
+<div id="cross"></div>
+<div id="status">Загрузка карты…</div>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { Collider, deriveInitial, simulate, forward, STAND_EYE, CROUCH_EYE } from "./sim.js";
+
+// nades.ai lineups, read 2026-11-08: setpos x y z (feet), setang pitch yaw, throw, landing point in game units
+const R = (px, py, z) => [-3230 + px*5, 1713 - py*5, z];   // de_mirage overview: pos_x -3230, pos_y 1713, scale 5
+const L = [
+  ["Смок на топ-мид с Т-спавна", [1422.94,36.44,-167.97], -42.4, -160.63, "stand", R(653.1,438.1,-184)],
+  ["Смок в коннектор с Т-спавна", [1422.96,36.47,-167.97], -19.88, -158.17, "jump", R(522.2,519.5,-254)],
+  ["Смок на лестницу с Т-спавна", [1239.95,-1128.5,-254.24], -58.22, -166.63, "jump", R(541.7,652,-38)],
+  ["Смок в джангл с Т-рута", [1003.97,-1210.26,-108.97], -14.35, -169.15, "jump", R(511,668,-170)],
+  ["Смок на КТ с рампы", [1093.71,-1010.33,-257.23], -28.48, -144.09, "jump", R(468,830,-109)],
+];
+const U = 0.0254;
+const W = (x, y, z) => new THREE.Vector3(y*U, z*U, x*U);   // Source 2 Viewer export axes (a rotation, no mirror)
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.localClippingEnabled = true;
+document.body.prepend(renderer.domElement);
+const clip = new THREE.Plane(new THREE.Vector3(0,-1,0), 200);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0e1216);
+const root = new THREE.Group(); scene.add(root);
+const cam = new THREE.PerspectiveCamera(73.74, innerWidth/innerHeight, 0.05, 1000);
+const ctl = new OrbitControls(cam, renderer.domElement); ctl.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xdde6f2, 0x5a5048, 1.4), new THREE.AmbientLight(0xffffff, 0.3));
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.0); sun.position.set(60, 45, 25); scene.add(sun);
+addEventListener("resize", () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth/innerHeight; cam.updateProjectionMatrix(); });
+const $ = id => document.getElementById(id), status = $("status");
+
+const [gltf, colBuf] = await Promise.all([
+  new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync("mirage.glb"),
+  fetch("mirage.col").then(r => r.arrayBuffer()),
+]);
+const map = gltf.scene, lights = [];
+map.traverse(o => { if (o.isLight) lights.push(o); }); lights.forEach(o => o.removeFromParent());
+const MAPMAT = new THREE.MeshStandardMaterial({color:0xc2b49c, roughness:1, metalness:0, flatShading:true, side:THREE.DoubleSide, clippingPlanes:[clip]});
+map.traverse(o => { if (o.isMesh) { if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); o.material = MAPMAT; } });
+root.add(map); map.updateMatrixWorld(true);
+
+const dv = new DataView(colBuf), nv = dv.getUint32(6, true), nt = dv.getUint32(10, true);
+const col = new Collider(new Float32Array(colBuf.slice(14, 14 + nv*12)), new Uint32Array(colBuf.slice(14 + nv*12, 14 + nv*12 + nt*12)), new Uint8Array(colBuf.slice(14 + nv*12 + nt*12)));
+status.textContent = "Двойной клик по полу — встать туда";
+
+const toWorld = p => root.localToWorld(W(p[0], p[1], p[2]));
+const toGame = v => { const l = root.worldToLocal(v.clone()); return [l.z/U, l.x/U, l.y/U]; };
+const ray = new THREE.Raycaster();
+
+// player: feet in game units, yaw/pitch in Source convention (negative pitch looks up)
+const me = { feet: null, yaw: 0, pitch: 0 };
+const body = new THREE.Group(), mat = new THREE.MeshStandardMaterial({color:0xf0b443, roughness:.6});
+const cap = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.05, 6, 12), mat); cap.position.y = 0.75;
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), mat); head.position.y = 1.55;
+body.add(cap, head); body.visible = false; scene.add(body);
+const aimLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color:0x5dff8a})); scene.add(aimLine);
+const shots = new THREE.Group(); scene.add(shots);
+let mode = "top";
+
+const eyeH = () => ($("type").value.startsWith("crouch") ? CROUCH_EYE : STAND_EYE);
+const eyeGame = () => [me.feet[0], me.feet[1], me.feet[2] + eyeH()];
+function aimDir() { const e = eyeGame(), f = forward(me.pitch, me.yaw); return toWorld([e[0]+f[0], e[1]+f[1], e[2]+f[2]]).sub(toWorld(e)).normalize(); }
+function place(feet, yaw = me.yaw, pitch = me.pitch) {
+  me.feet = feet; me.yaw = yaw; me.pitch = pitch;
+  body.position.copy(toWorld(feet)); body.visible = mode !== "eye";
+  update();
+}
+function update() {
+  if (!me.feet) return;
+  const e = toWorld(eyeGame()), d = aimDir();
+  ray.set(e, d); const h = ray.intersectObject(map, true)[0];
+  aimLine.geometry.setFromPoints([e, h ? h.point : e.clone().addScaledVector(d, 40)]);
+  const f = me.feet;
+  $("cmd").textContent = `setpos ${f[0].toFixed(2)} ${f[1].toFixed(2)} ${f[2].toFixed(2)}; setang ${me.pitch.toFixed(2)} ${me.yaw.toFixed(2)} 0`;
+  if (mode === "eye") { cam.position.copy(e); cam.lookAt(e.clone().add(d)); }
+}
+let lastRest = null;   // world point where the last throw stopped
+const cutBase = () => Math.max(me.feet ? toWorld(me.feet).y : 0, lastRest ? lastRest.y : -1e9);
+function top() {
+  mode = "top"; $("cross").style.display = "none"; ctl.enabled = true; body.visible = !!me.feet;
+  clip.constant = (me.feet ? cutBase() : 0) + +$("cut").value;
+  if (!me.feet) { const c = new THREE.Box3().setFromObject(map).getCenter(new THREE.Vector3()); cam.position.set(c.x, c.y + 140, c.z + 40); ctl.target.copy(c); return; }
+  const a = toWorld(me.feet), b = lastRest || a, c = a.clone().lerp(b, .5), d = Math.max(12, a.distanceTo(b));
+  cam.position.set(c.x + d*0.15, c.y + d*1.1 + 6, c.z + d*0.45); ctl.target.copy(c);
+}
+function eye() {
+  if (!me.feet) { status.textContent = "Сначала встань: двойной клик по полу"; return; }
+  mode = "eye"; $("cross").style.display = "block"; ctl.enabled = false; body.visible = false; clip.constant = 200; update();
+}
+$("vTop").onclick = top; $("vEye").onclick = eye;
+$("cut").oninput = () => { if (mode === "top") clip.constant = (me.feet ? cutBase() : 0) + +$("cut").value; };
+$("type").onchange = update;
+$("hide").onclick = () => { $("ui").hidden = !$("ui").hidden; };
+$("cmd").onclick = () => navigator.clipboard?.writeText($("cmd").textContent).then(() => status.textContent = "Скопировано: вставь в консоль игры");
+
+// stand on the collision floor under a screen point (double click, or the centre of the screen)
+function standAt(x, y) {
+  if (mode !== "top") return;
+  ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -y / innerHeight * 2 + 1), cam);
+  const h = ray.intersectObject(map, true).find(k => clip.distanceToPoint(k.point) >= 0);
+  if (!h) { status.textContent = "Там нет пола: покрути карту"; return; }
+  const g = toGame(h.point), down = col.hull([g[0], g[1], g[2] + 40], [g[0], g[1], g[2] - 40], 0.7);
+  const z = down ? g[2] + 40 - 80*down.T - 2 : g[2];
+  lastRest = null; shots.clear(); place([g[0], g[1], z]); top();
+}
+renderer.domElement.addEventListener("dblclick", ev => standAt(ev.clientX, ev.clientY));
+$("vStand").onclick = () => standAt(innerWidth / 2, innerHeight / 2);
+// look around in eye mode: drag with mouse or finger
+let drag = null;
+renderer.domElement.addEventListener("pointerdown", ev => { if (mode === "eye") { drag = [ev.clientX, ev.clientY]; renderer.domElement.setPointerCapture(ev.pointerId); } });
+renderer.domElement.addEventListener("pointerup", () => drag = null);
+renderer.domElement.addEventListener("pointermove", ev => {
+  if (!drag || mode !== "eye") return;
+  const k = ev.shiftKey ? 0.02 : 0.12;
+  me.yaw -= (ev.clientX - drag[0]) * k * (ev.pointerType === "touch" ? 2 : 1);
+  me.pitch = Math.max(-89, Math.min(89, me.pitch + (ev.clientY - drag[1]) * k));
+  drag = [ev.clientX, ev.clientY]; update();
+});
+addEventListener("keydown", ev => { if (ev.key === "f" || ev.key === "F" || ev.key === "а" || ev.key === "А") throwIt(); });
+
+function throwIt(target) {
+  if (!me.feet) { status.textContent = "Сначала встань: двойной клик по полу"; return; }
+  update();
+  const [p, v] = deriveInitial(eyeGame(), me.yaw, me.pitch, $("type").value, +$("btn").value);
+  const r = simulate(col, p, v);
+  shots.clear();
+  const pts = r.path.filter((_, i) => i % 2 === 0 || i === r.path.length - 1).map(toWorld);
+  if (pts.length > 1) shots.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), Math.min(800, pts.length * 2), 0.06, 6), new THREE.MeshBasicMaterial({color:0xd7dee3})));
+  for (const h of r.hits) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({color: h.glass ? 0x66ccff : 0xffffff})); s.position.copy(toWorld(h.p)); shots.add(s); }
+  const land = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), new THREE.MeshBasicMaterial({color:0xf0b443, transparent:true, opacity:.75}));
+  land.position.copy(toWorld(r.rest)); shots.add(land); lastRest = r.lost ? null : land.position.clone();
+  let txt = r.lost ? "Граната улетела за карту." : `Легла через ${r.time.toFixed(1)} с, отскоков: ${r.bounces}.`;
+  if (target) {
+    const t = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), new THREE.MeshBasicMaterial({color:0x5dff8a, wireframe:true})); t.position.copy(toWorld(target)); shots.add(t);
+    txt += ` До точки nades.ai: ${(Math.hypot(r.rest[0]-target[0], r.rest[1]-target[1], r.rest[2]-target[2]) * 2.54).toFixed(0)} см (зелёный круг).`;
+  }
+  $("res").textContent = txt;
+  playPath = { pts: r.path.map(toWorld), i: 0 };
+}
+$("go").onclick = () => { throwIt(); if (mode === "top") top(); };
+
+$("list").innerHTML = L.map((l, i) => `<button data-i="${i}">${l[0]}<br><small>${({stand:"Стоя",jump:"Прыжок",runjump:"Разбег (W) + прыжок"})[l[4]]}, ЛКМ</small></button>`).join("");
+$("list").onclick = ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  const l = L[+b.dataset.i];
+  $("list").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $("type").value = l[4]; $("btn").value = "1";
+  place(l[1], l[3], l[2]); throwIt(l[5]); if (mode === "top") top(); else update();
+};
+
+// open at a stand spot from a link: ?setpos=x,y,z&setang=pitch,yaw
+const q = new URLSearchParams(location.search);
+if (q.get("setpos")) { const p = q.get("setpos").split(",").map(Number), a = (q.get("setang") || "0,0").split(",").map(Number); place(p, a[1], a[0]); }
+
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshBasicMaterial({color:0xffffff})); scene.add(ball); ball.visible = false;
+let playPath = null;
+top();
+renderer.setAnimationLoop(() => {
+  if (playPath) { ball.visible = true; ball.position.copy(playPath.pts[Math.min(playPath.i, playPath.pts.length - 1)]); playPath.i += 2; if (playPath.i > playPath.pts.length + 30) { playPath = null; ball.visible = false; } }
+  if (mode === "top") ctl.update();
+  renderer.render(scene, cam);
+});
+window.DBG = { col, me, place, throwIt, simulate, deriveInitial, toGame, toWorld, map, ray };
+</script>
+</body></html>
