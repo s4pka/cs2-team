@@ -108,7 +108,7 @@ h2{font:500 12px var(--display);letter-spacing:.12em;text-transform:uppercase;co
     <a class="ib" id="toList" href="../"><i data-lucide="layout-list"></i><span class="tip">Все раскидки</span></a>
     <a class="ib" id="toNames" href="../"><i data-lucide="tag"></i><span class="tip">Названия</span></a>
     <a class="ib" id="toCfg" href="../"><i data-lucide="sliders-horizontal"></i><span class="tip">Конфиги</span></a>
-    <a class="ib" href="../3d/"><i data-lucide="box"></i><span class="tip">Mirage в 3D: встать и бросить смок</span></a>
+    <a class="ib" id="to3d" href="https://www.smokepractice.com/" target="_blank" rel="noopener"><i data-lucide="box"></i><span class="tip">Бросить в 3D на SmokePractice</span></a>
   </nav>
 
   <main class="stage" id="stage">
@@ -163,6 +163,7 @@ function setMap(k){
   S.map = k; D = {...DATA.maps[k], key:k, ni:DATA.ni}; S.sel = S.open = null; S.video = false; S.level = "up";
   history.replaceState(null, "", "#" + k); document.title = "Карта гранат · " + D.name;
   for(const [id, tab] of [["toList","nades"],["toNames","names"],["toCfg","cfg"]]) $(id).href = `../#${k}-${tab}-${S.side === "ct" ? "ct" : "t"}`;
+  $("to3d").href = `https://www.smokepractice.com/${k}`;
   mapBtns(); levelBtns(); layerBtn(); paintImages();
   const ok = new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = D.radar; });
   ok.then(() => { fit(); });
