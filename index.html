@@ -628,7 +628,7 @@ function hashOf(){ return V.view === "map" ? `#${S.map}` : V.view === "cfg" ? "#
 function route(){
   // #mirage (map), #mirage-board, #cfg, #mirage-nades-ct-2, #mirage-names; the old main-site form #mirage-nades-t-2 and #dust2-cfg-t too
   // #mirage-board~<code>: a board sent by link (shareLink below)
-  const m = location.hash.match(/^#([a-z0-9]+)(?:-(map|board|cfg|nades|names))?(?:-(t|ct))?(?:-(\d+))?(?:~([A-Za-z0-9_-]+))?(?:@([A-Za-z0-9]+))?$/);
+  const m = location.hash.match(/^#([a-z0-9]+)(?:-(map|board|cfg|nades|names))?(?:-(t|ct))?(?:-(\d+))?(?:~([A-Za-z0-9_-]+))?(?:@([A-Za-z0-9-]+))?$/);
   let k = S.map || DATA.order[0], v = "map";
   if(m){ if(m[1] === "cfg") v = "cfg"; else if(DATA.maps[m[1]]){ k = m[1]; v = m[2] || "map"; } if(m[3]) V.side = m[3]; V.cat = m[4] ? +m[4]-1 : 0; }
   if(v === "names"){ v = "map"; S.names = true; }   // the old names section: the map with its names layer
@@ -760,7 +760,7 @@ const TEAM = () => "team-" + S.map;
 async function openTeam(){
   const m = S.map, id = TEAM(); if(BD.doc || BD.shared || V.bid || V.code) return;
   const ref = FB.db.doc("boards/" + id), sn = await ref.get().catch(() => null); if(!sn) return;
-  if(!sn.exists) await ref.set({map:m, name:"Общая", data:JSON.stringify([{o:[], note:""}]), t:Date.now(), by:BD.by}).catch(() => {});
+  if(!sn.exists) await ref.set({map:m, name:"Основная", data:JSON.stringify([{o:[], note:""}]), t:Date.now(), by:BD.by}).catch(() => {});
   if(S.map !== m || BD.doc || BD.shared) return;
   openBoard(id);
 }
@@ -1145,6 +1145,7 @@ function boardMove(e){
 }
 function boardUp(){
   const d = BD.drag; BD.drag = null; if(!d) return;
+  if(BD.remote) setTimeout(applyRemote, 0);   // others' edits that came during the drag, merged after this one is saved
   if(d.place){ place(d.place, d.on); return; }
   if(d.th){   // a second click, or a drag from the throw spot, ends the throw
     const a = BD.th, b = BD.thTo, far = Math.hypot(b[0]-a[0], b[1]-a[1]) > LW()*3;
@@ -1154,7 +1155,6 @@ function boardUp(){
     else paint();
     return; }
   if(d.pick){ pickAt(d.pick); return; }
-  if(BD.remote) setTimeout(applyRemote, 0);
   if(d.move !== undefined){ if(!d.moved){ BD.undo.pop(); if(d.ts){ BD.sel = -1; toggleInfo(objs()[d.move].id); boardBars(); return; } } saveBoard(); paint(); boardBars(); return; }
   if(d.turn !== undefined){ saveBoard(); paint(); boardBars(); return; }
   if(d.erase) return;
@@ -1331,8 +1331,14 @@ async function openShared(code){
   catch(e){ BD.msg = "Ссылка повреждена"; }
   history.replaceState(null, "", hashOf()); boardUI(); if(BD.msg) toast(BD.msg); BD.msg = "";
 }
-function keepShared(){ BD.shared = ""; saveBoard(); history.replaceState(null, "", hashOf()); boardUI(); }
-function ownBoard(){ loadBoard(); history.replaceState(null, "", hashOf()); boardUI(); }
+// every board is shared: a board sent as a picture-link becomes one more board in the list when kept
+async function keepShared(){
+  if(!(L.fb && FB.db)){ BD.shared = ""; saveBoard(); history.replaceState(null, "", hashOf()); boardUI(); return; }
+  const name = "Доска " + new Date().toLocaleString("ru", {day:"numeric", month:"numeric", hour:"2-digit", minute:"2-digit"});
+  const ref = await FB.db.collection("boards").add({map:S.map, name, data:JSON.stringify(BD.steps), t:Date.now(), by:BD.by}).catch(() => null);
+  if(ref) openBoard(ref.id); else toast("Не создалась");
+}
+function ownBoard(){ closeDoc(); BD.doc = ""; loadBoard(); history.replaceState(null, "", hashOf()); boardUI(); }
 
 /* shared boards: Firestore collection boards, doc {map, name, data: the steps as JSON, t, by}. Anyone with the site
    lists a map's boards, opens one, edits it, and sees the others' edits arrive live; the draft stays in this browser. */
@@ -1344,7 +1350,18 @@ function listBoards(){
     unList = FB.db.collection("boards").where("map", "==", m).onSnapshot(q => { if(listMap !== m) return;
       BD.list = q.docs.map(d => ({id:d.id, name:d.get("name")})).sort((a, b) => (b.id === TEAM()) - (a.id === TEAM()) || a.name.localeCompare(b.name, "ru")); boardBars(); }, () => {}); });
 }
-function flush(){ saveT = 0; if(!BD.doc) return; FB.db.doc("boards/" + BD.doc).update({data:JSON.stringify(BD.steps), t:Date.now(), by:BD.by}).catch(() => toast("Не сохранилось")); }
+// a write reads the board as it is now and merges own edits into it in one transaction, so two people never erase each other
+function flush(){
+  saveT = 0; if(!BD.doc) return; const id = BD.doc, ref = FB.db.doc("boards/" + id), mine = JSON.parse(JSON.stringify(BD.steps)), base = BD.base;
+  BD.flying = true; const seen = new Set();   // board states this write already read and merged; held copies of them are stale
+  const done = () => { BD.flying = false; if(BD.remote && seen.has(JSON.stringify(BD.remote))) BD.remote = null; if(BD.remote && !BD.drag) applyRemote(); };
+  FB.db.runTransaction(async tx => { const sn = await tx.get(ref); if(!sn.exists) return null; let cur = null; try { cur = JSON.parse(sn.get("data")); seen.add(JSON.stringify(cur)); } catch(e){}
+    const out = base && Array.isArray(cur) && cur.length && JSON.stringify(cur) !== JSON.stringify(base) ? mergeSteps(base, mine, cur) : mine;
+    tx.update(ref, {data:JSON.stringify(out), t:Date.now(), by:BD.by}); return out; })
+  .then(out => { if(!out || BD.doc !== id){ done(); return; } BD.base = out;
+    if(JSON.stringify(out) !== JSON.stringify(mine)){ BD.steps = mergeSteps(mine, BD.steps, out); BD.cur = Math.min(BD.cur, BD.steps.length-1); if(!BD.drag){ paint(); boardBars(); } } done(); })
+  .catch(() => { done(); toast("Не сохранилось"); });
+}
 function queueSave(){ clearTimeout(saveT); saveT = setTimeout(flush, 400); }
 function closeDoc(){ if(unDoc){ unDoc(); unDoc = null; } if(saveT){ clearTimeout(saveT); flush(); } BD.doc = ""; BD.remote = null; BD.sureDel = false; BD.naming = ""; }
 function openBoard(id){
@@ -1361,7 +1378,31 @@ function openBoard(id){
     if(!BD.drag) applyRemote();
   }, () => toast("Нет связи с общими досками"));
 }
-function applyRemote(){ const st = BD.remote; BD.remote = null; if(!Array.isArray(st) || !st.length) return; BD.steps = st; BD.cur = Math.min(BD.cur, st.length-1); BD.sel = -1; paint(); boardBars(); }
+function applyRemote(){ if(BD.flying) return; const st = BD.remote; BD.remote = null;   // while an own write is on its way, others wait for it if(!Array.isArray(st) || !st.length) return;
+  const mine = saveT && BD.base;   // own edits not written yet: keep them on top of the others' (a three-way merge by object)
+  BD.steps = mine ? mergeSteps(BD.base, BD.steps, st) : st; BD.base = JSON.parse(JSON.stringify(st));
+  BD.cur = Math.min(BD.cur, BD.steps.length-1); BD.sel = -1; paint(); boardBars(); }
+/* two people drawing at once: the board is written whole, so before an own write lands, others' writes are merged object
+   by object against the last board both saw (base): what one side changed wins over what it left alone, an object one
+   side deleted and the other left alone goes, and new objects from both stay. Objects are matched by id, players by
+   number, and drawings without an id by their content. */
+const mkey = o => o.id ? o.t + o.id : o.t === "tok" ? "t" + o.n : JSON.stringify(o);
+function mergeObjs(base, mine, theirs){
+  const B = new Map(base.map(o => [mkey(o), JSON.stringify(o)])), M = new Map(mine.map(o => [mkey(o), o])), T = new Map(theirs.map(o => [mkey(o), o]));
+  const out = [];
+  theirs.forEach(o => { const k = mkey(o), m = M.get(k);
+    if(m) out.push(B.get(k) === JSON.stringify(m) ? o : m);            // both have it: my change, else theirs
+    else if(!B.has(k) || B.get(k) !== JSON.stringify(o)) out.push(o); });   // I deleted it: gone, unless they changed or added it
+  mine.forEach(o => { const k = mkey(o); if(T.has(k)) return;
+    if(!B.has(k) || B.get(k) !== JSON.stringify(o)) out.push(o); });      // mine only: keep what I added or changed
+  return out;
+}
+function mergeSteps(base, mine, theirs){
+  if(mine.length !== base.length) return mine;      // I added or removed a step: mine
+  if(theirs.length !== base.length) return theirs;  // they did: theirs
+  return theirs.map((t, k) => { const b = base[k], m = mine[k], pick = f => (m[f] ?? "") !== (b[f] ?? "") ? m[f] : t[f];
+    const st = {...t, o:mergeObjs(b.o || [], m.o || [], t.o || [])}; ["time", "note"].forEach(f => { const v = pick(f); if(v === undefined || v === "") delete st[f]; else st[f] = v; }); if(st.note === undefined) st.note = ""; return st; });
+}
 async function nameDone(){
   const v = ($("bname") || {}).value, name = (v || "").trim().slice(0, 40), mode = BD.naming; BD.naming = "";
   if(!name){ boardBars(); return; }
@@ -1373,14 +1414,14 @@ function picker(){
   if(!L.fb || !FB.db) return "";
   const cur = BD.list.find(b => b.id === BD.doc);
   if(BD.naming) return `<input id="bname" class="bname" maxlength="40" placeholder="Название доски" value="${BD.naming === "rename" && cur ? esc(cur.name) : ""}">` + bb("nameok", "Готово (Enter)", "check") + bb("namecancel", "Отмена (Esc)", "x");
-  const opts = [["", "Черновик"], ...(BD.doc && !cur ? [[BD.doc, "…"]] : []), ...BD.list.map(b => [b.id, b.name])];
+  const opts = [...(!cur ? [[BD.doc, "…"]] : []), ...BD.list.map(b => [b.id, b.name])];   // only shared boards; no browser-only draft
   return `<select id="bsel" class="bsel" title="Доска">${opts.map(([v, l]) => `<option value="${v}"${v === BD.doc ? " selected" : ""}>${esc(l)}</option>`).join("")}<option value="+">＋ Новая доска</option></select>` +
     (BD.doc ? bb("rename", "Переименовать", "pencil") + `<button type="button" class="ib${BD.sureDel ? " danger" : ""}" data-act="delb" title="${BD.sureDel ? "Точно удалить у всех?" : "Удалить доску"}">${icon("file-x")}</button>` : "");
 }
 $("bacts").addEventListener("change", e => {
   if(e.target.id !== "bsel") return; const v = e.target.value;
   if(v === "+"){ BD.naming = "new"; boardBars(); setTimeout(() => $("bname") && $("bname").focus(), 0); return; }
-  if(v) openBoard(v); else ownBoard();
+  if(v) openBoard(v);
 });
 $("bacts").addEventListener("keydown", e => { if(e.target.id !== "bname") return; e.stopPropagation(); if(e.key === "Enter") nameDone(); if(e.key === "Escape"){ BD.naming = ""; boardBars(); } });
 
