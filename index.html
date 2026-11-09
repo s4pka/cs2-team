@@ -1150,6 +1150,13 @@ function boardMove(e){
   else if(g.t === "circ") g.r = r1(Math.hypot(p[0]-g.x, p[1]-g.y));
   paint();
 }
+// a throw by hand goes to the chosen player, who stands on its throw spot, as a lineup from the list does (pickAt)
+function handThrow(o){
+  const n = Math.min(BD.color, 4)+1, p = objs().find(q => q.t === "tok" && q.n === n && !q.dead), to = o.b && o.b.length ? o.b[0] : [o.lx, o.ly];
+  push();
+  if(p){ o.by = n; p.x = o.tx; p.y = o.ty; p.a = Math.round(Math.atan2(to[1]-o.ty, to[0]-o.tx)*180/Math.PI); }
+  objs().push(o); saveBoard(); paint(); boardBars();
+}
 function boardUp(){
   const d = BD.drag; BD.drag = null; if(!d) return;
   if(BD.remote) setTimeout(applyRemote, 0);   // others' edits that came during the drag, merged after this one is saved
@@ -1158,7 +1165,7 @@ function boardUp(){
     const a = BD.th, b = BD.thTo, far = Math.hypot(b[0]-a[0], b[1]-a[1]) > LW()*3;
     if(d.th === "second" || far){ const hops = BD.thB; BD.th = BD.thTo = null; BD.thB = [];
       if(BD.tool === "run"){ if(far) commit({t:"run", id:uid(), a, b}); else paint(); }
-      else if(far || hops.length) commit({t:"ln", k:BD.kind, id:uid(), tx:a[0], ty:a[1], lx:b[0], ly:b[1], ...(hops.length ? {b:hops} : {})}); else paint(); }
+      else if(far || hops.length) handThrow({t:"ln", k:BD.kind, id:uid(), tx:a[0], ty:a[1], lx:b[0], ly:b[1], ...(hops.length ? {b:hops} : {})}); else paint(); }
     else paint();
     return; }
   if(d.pick){ pickAt(d.pick); return; }
@@ -1493,7 +1500,7 @@ function setColor(i){
   BD.color = i; BD.sure = false;
   const o = objs()[BD.sel];
   if(o && o.c && o.t !== "tok"){ push(); o.c = COLORS[i]; saveBoard(); }
-  else if(!["pen","arrow","rect","circ","text","tok","pick","select"].includes(BD.tool)) BD.tool = "pen";   // with lineups or select, 1–5 pick the player
+  else if(!["pen","arrow","rect","circ","text","tok","select","eye","run", ...GT].includes(BD.tool)) BD.tool = "pen";   // with grenades, sight, walks or select, 1–5 pick the player
   boardUI();
 }
 /* grenade tool: every lineup of that kind on this map shows where it lands; landings in one place group with a count.
