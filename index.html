@@ -1416,7 +1416,7 @@ function picker(){
   if(BD.naming) return `<input id="bname" class="bname" maxlength="40" placeholder="Название доски" value="${BD.naming === "rename" && cur ? esc(cur.name) : ""}">` + bb("nameok", "Готово (Enter)", "check") + bb("namecancel", "Отмена (Esc)", "x");
   const opts = [...(!cur ? [[BD.doc, "…"]] : []), ...BD.list.map(b => [b.id, b.name])];   // only shared boards; no browser-only draft
   return `<select id="bsel" class="bsel" title="Доска">${opts.map(([v, l]) => `<option value="${v}"${v === BD.doc ? " selected" : ""}>${esc(l)}</option>`).join("")}<option value="+">＋ Новая доска</option></select>` +
-    (BD.doc ? bb("rename", "Переименовать", "pencil") + `<button type="button" class="ib${BD.sureDel ? " danger" : ""}" data-act="delb" title="${BD.sureDel ? "Точно удалить у всех?" : "Удалить доску"}">${icon("file-x")}</button>` : "");
+    (BD.doc && BD.doc !== TEAM() ? bb("rename", "Переименовать", "pencil") + `<button type="button" class="ib${BD.sureDel ? " danger" : ""}" data-act="delb" title="${BD.sureDel ? "Точно удалить у всех?" : "Удалить доску"}">${icon("file-x")}</button>` : "");
 }
 $("bacts").addEventListener("change", e => {
   if(e.target.id !== "bsel") return; const v = e.target.value;
