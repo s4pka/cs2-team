@@ -164,6 +164,23 @@ img,svg image{-webkit-user-drag:none}
 .vm.gone .vnum,.vm.gone .vtug{visibility:hidden}
 .vm.final{box-shadow:inset 0 0 0 2px var(--fg)}
 @media (max-width:760px){.vmaps{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.vm{padding:9px;border-radius:11px}.vnum{font-size:26px}.vname{font-size:11px}.vbig{font-size:36px}}
+/* the picked map: a banner with its picture, then their five with a role chip each */
+.mc{display:grid;gap:8px;min-width:0}
+.mcb{border-radius:14px;overflow:hidden;padding:18px;display:flex;align-items:flex-end;gap:16px;min-height:150px;
+  background:linear-gradient(90deg,#0e1216 0%,#0e1216cc 45%,#0e121633 100%),var(--img) center/cover,var(--raise);box-shadow:inset 0 0 0 1px #ffffff14}
+.mcb .mmap{font:600 34px/1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+.mcb .sp{flex:1}.mcb .btn{background:#0e1216cc}
+.ops{display:grid;gap:6px}
+.op{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--panel);min-width:0}
+.op.thin{background:none;border:1px dashed var(--line);padding:9px 11px}
+.op .onick{font-weight:600;text-decoration:none;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ocap svg{width:16px;height:16px;color:var(--accent);display:block}
+.oroles{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.orole{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;background:var(--raise);font:600 12px var(--display);letter-spacing:.06em}
+.orole svg{width:15px;height:15px;color:var(--accent)}.orole.awp svg{color:#ef6b5b}
+.okd{margin-left:auto;font:600 20px var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}.okd small{font-size:11px;color:var(--mute);margin-right:4px}
+@media (max-width:760px){.mcb{min-height:110px;padding:14px;flex-wrap:wrap;gap:10px 14px}.mcb .mmap{font-size:26px}.mcb .sp{flex-basis:100%;height:0}
+  .op{flex-wrap:wrap;gap:8px 10px}.oroles{order:3;flex-basis:100%}.oroles:empty{display:none}}
 .mtop{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .mmap{font:600 30px var(--display);letter-spacing:.04em}
 .mscore{font:600 24px var(--display)}.mscore.win{color:#5dd27a}.mscore.loss{color:#ef6b5b}
@@ -864,7 +881,7 @@ function vetoView(a){
       ${tag}<span class="vnum">${Math.round(VM.P[m]*100)}<small>%</small></span><span class="vname">${esc(mapName(m))}</span>
       <span class="vtug"><i style="width:${(us.r / (us.r + th.r) * 100).toFixed(1)}%"></i></span></button>`;
   }).join("");
-  return `<section class="veto"><div class="vhead">
+  return (done ? mapCard(a, left[0], VM.P[left[0]]) : "") + `<section class="veto"><div class="vhead">
       <span class="vturn ${done ? "" : mine ? "us" : "them"}">${done ? "ИГРАЕМ" : mine ? "НАШ БАН" : "ИХ БАН"}</span>
       <span class="vbig" title="Наш шанс на победу в конце бана">${Math.round(chance*100)}<small>%</small></span>
       <span class="sp"></span>
@@ -872,11 +889,42 @@ function vetoView(a){
       <button class="ib" data-vreset title="Как было">${icon("rotate-ccw")}</button>
     </div><div class="vmaps">${cards}</div></section>`;
 }
+/* ---------- the picked map: their five and what each one does on it ----------
+   After FACEIT Scout's "sixty-second card" (faceitscout.com/blog/enemy-scout-sixty-second-card, 2026-09-06): who has
+   the AWP, who takes the first fight, who throws the utility; no percentages. One player per role, from his stats on
+   this map when he has 3 or more matches on it (a dashed row otherwise: his stats over all maps). AWP by Faceit Scope's
+   score sniperRate*500 + adr*0.3 + (kd-1)*30, shown only at a sniper kill rate of 10 % or more (Claude's cut); clutch by
+   Faceit Scope's 1v1 win rate above 40 % (vault/raw/cs2-faceit-2026-11-09/match-info.md rows 15-18). */
+function mapCard(a, m, chance){
+  const k = m.replace(/^de_/, ""), lineups = !!DATA.maps[k];
+  const st = p => { const s = p.maps?.[m]; return s && s.g >= 3 ? {...s, own:true} : {g:s?.g || 0, w:s?.w, kd:p.kd, adr:p.adr, awp:p.sniper, entry:p.entry, flash:p.flash, clutch:p.clutch, own:false}; };
+  const ps = a.them.players.map(p => ({p, s:st(p), r:[]}));
+  const top = f => ps.reduce((x, y) => (f(y) ?? -1) > (f(x) ?? -1) ? y : x);
+  const awp = top(x => (x.s.awp || 0)*500 + (x.s.adr || 0)*.3 + ((x.s.kd ?? 1) - 1)*30);
+  if((awp.s.awp || 0) >= .1) awp.r.push(["crosshair", "AWP", "awp"]);
+  top(x => x.s.entry?.[0]).r.push(["zap", "Первым", ""]);
+  top(x => x.s.flash?.[0]).r.push(["sun", "Флешки", ""]);
+  const cl = top(x => x.s.clutch); if(cl.s.clutch > .4) cl.r.push(["shield", "Клатч", ""]);
+  const party = a.them.premade ? a.them.players.map(p => p.nick) : stacks(a.them).flatMap(s => s.who);
+  ps.forEach(x => { if(party.includes(x.p.nick)) x.r.push(["users", "Пачка", ""]); });
+  const rows = [...ps].sort((x, y) => (y.s.kd ?? 0) - (x.s.kd ?? 0)).map(x => {
+    const tip = `${x.s.own ? "На карте" : "Мало игр на карте, по всем картам"}: ${x.s.g} матчей${x.s.w != null ? `, побед ${x.s.w}%` : ""}${x.s.adr ? `, ADR ${Math.round(x.s.adr)}` : ""}`;
+    return `<div class="op${x.s.own ? "" : " thin"}" title="${tip}"><span class="lvl l${x.p.level}">${x.p.level ?? "?"}</span>
+      <a class="onick" href="https://www.faceit.com/ru/players/${encodeURIComponent(x.p.nick)}" target="_blank" rel="noopener">${esc(x.p.nick)}</a>${x.p.id === a.them.leader ? `<span class="ocap" title="Капитан">${icon("crown")}</span>` : ""}
+      <span class="oroles">${x.r.map(([i, w, c]) => `<span class="orole ${c}">${icon(i)}${w}</span>`).join("")}</span>
+      <span class="okd"><small>K/D</small>${x.s.kd ?? "—"}</span></div>`;
+  }).join("");
+  const score = a.map === m && a.score ? `<span class="mscore ${a.score[0] > a.score[1] ? "win" : "loss"}">${a.score[0]}:${a.score[1]}</span>` : "";
+  return `<section class="mc"><div class="mcb" style="--img:url(maps/${k}.webp)">
+      <span class="mmap">${esc(mapName(m))}</span><span class="vbig" title="Наш шанс на победу">${Math.round(chance*100)}<small>%</small></span>${score}<span class="sp"></span>
+      ${lineups ? `<button class="btn" data-go="nades:${k}">${icon("layout-list")}Раскидки</button><button class="btn" data-go="board:${k}">${icon("pencil-ruler")}Доска</button>` : ""}
+    </div><div class="ops">${rows}</div></section>`;
+}
 function matchView(){
   const id = MT.cur, a = MT.data[id];
   const when = t => { const d = new Date(t*1000); return d.toLocaleDateString("ru", {day:"2-digit", month:"2-digit"}) + " " + d.toLocaleTimeString("ru", {hour:"2-digit", minute:"2-digit"}); };
-  const chips = (MT.list || []).map(x => `<button class="seg" data-mid="${x.id}" aria-pressed="${x.id === id}">${x.id === MT.last?.id && MT.data[x.id]?.status !== "FINISHED" ? "Сейчас" : when(x.at)}</button>`).join("");
-  let h = `<div class="mhead"><div class="grp mlist">${chips || `<span class="seg">Матчей нет</span>`}</div>${a?.url ? `<a class="ib" href="${esc(a.url)}" target="_blank" rel="noopener" title="Комната FACEIT">${icon("external-link")}</a>` : ""}</div>`;
+  const chips = (MT.list || []).map(x => `<button class="seg" data-mid="${x.id}" aria-pressed="${x.id === id}">${x.id === MT.last?.id && (MT.data[x.id]?.status || String(x.status).toUpperCase()) !== "FINISHED" ? "Сейчас" : when(x.at)}</button>`).join("");
+  let h = `<div class="mhead"><div class="grp mlist">${chips || (MT.list ? `<span class="seg">Матчей нет</span>` : "")}</div>${a?.url ? `<a class="ib" href="${esc(a.url)}" target="_blank" rel="noopener" title="Комната FACEIT">${icon("external-link")}</a>` : ""}</div>`;
   if(MT.err && !a) return h + `<p class="mnote">${MT.err}</p>`;
   if(!a || a.them?.players?.length && !a.them.players[0].recentGames) return h + `<p class="mnote">Загрузка…</p>`;
   if(!a.them || !a.them.players.length || !a.pool.length) return h + `<p class="mnote">${MSTAT[a.status] || a.status}</p>`;
@@ -894,6 +942,7 @@ page.addEventListener("click", e => {
   if(b.hasAttribute("data-vundo")){ MT.bans[MT.cur]?.pop(); paintPage(); return; }
   if(b.hasAttribute("data-vreset")){ MT.bans[MT.cur] = [...(MT.real[MT.cur] || [])]; paintPage(); return; }
   if(b.dataset.gomap){ show("map", b.dataset.gomap); return; }
+  if(b.dataset.go){ const [v, k] = b.dataset.go.split(":"); show(v, k); return; }
   if(b.dataset.pm){ V.cat = 0; show(V.view, b.dataset.pm); return; }
   if(b.dataset.ps){ V.side = b.dataset.ps; V.cat = 0; show("nades", S.map); return; }
   if(b.dataset.cat){ V.cat = +b.dataset.cat; show("nades", S.map); return; }
