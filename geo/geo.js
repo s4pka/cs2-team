@@ -480,8 +480,19 @@ function GeoCore() {
 
   function smokeShape(p, opts) {
     opts = opts || {};
-    const w = wpt(p, opts.hint); if (!w) return null;
-    const s = floodSmoke(w.x, w.y, w.z, opts);
+    let w = wpt(p, opts.hint), s = w && floodSmoke(w.x, w.y, w.z, opts);
+    // a landing from the radar can sit in a wall or on its edge, and the fill then stops at once; when the cloud is under a
+    // third of its sphere, start it from the nearby floor points (up to 128 units away, nearer first) and keep the largest
+    const full = Math.PI * (opts.radius || SMOKE_R) ** 2, cell = opts.cell || 8;
+    if (!s || s.count * cell * cell < full / 3) {
+      for (const d of [16, 32, 48, 72, 96, 128]) { if (s && s.count * cell * cell >= full / 3) break; for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4, q = [p[0] + d * Math.cos(a) / M.scale, p[1] + d * Math.sin(a) / M.scale];
+        const w2 = wpt(q, opts.hint); if (!w2 || w2.area < 0) continue;
+        const s2 = floodSmoke(w2.x, w2.y, w2.z, opts);
+        if (!s || s2.count > s.count) { s = s2; w = w2; }
+      } }
+    }
+    if (!s) return null;
     const rs = rings(s).map(r => dp(r, s.cell * 0.45)).map(r => r.map(q => [x2px(q[0]), y2py(q[1])]));
     // y flips between world and pixels, so areas change sign; outer ring = the largest by |area|
     rs.sort((a, b) => Math.abs(ringArea(b)) - Math.abs(ringArea(a)));
