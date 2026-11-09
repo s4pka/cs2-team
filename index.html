@@ -148,6 +148,12 @@ img,svg image{-webkit-user-drag:none}
 .mmaps .up{color:#5dd27a}.mmaps .dn{color:#ef6b5b}
 .tag{padding:3px 8px;border-radius:6px;font:600 12px var(--display);letter-spacing:.06em}.tag.pick{background:#1f3a27;color:#5dd27a}.tag.ban{background:#3d2220;color:#ef6b5b}
 .mteam,.mscroll{overflow-x:auto}
+.verdict{display:grid;gap:8px;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.vrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.vrow b{font:600 17px var(--display);letter-spacing:.03em}.vrow>span:last-child{color:var(--mute)}
+.tag{display:inline-flex;align-items:center;gap:5px;background:var(--raise)}.tag svg{width:14px;height:14px}.tag.cold{background:#2a2f36;color:var(--mute)}
+.mmaps tbody tr{cursor:pointer}.mmaps tbody tr:hover td{background:#1a2228}.mmaps tr.focus td{background:var(--raise)}.mmaps tr.focus td:first-child{box-shadow:inset 3px 0 var(--fg)}
+.mmaps tr.picked td:first-child{box-shadow:inset 3px 0 var(--accent)}
+.mchips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.mchips .chip{display:inline-flex;align-items:center;gap:6px}.mchips svg{width:15px;height:15px;color:var(--accent)}
 .mteam h2{display:flex;gap:10px;align-items:center;margin:6px 0 2px;font:600 18px var(--display);letter-spacing:.04em}
 .mteam.them h2{color:#ef6b5b}.mavg{margin-left:auto;font:500 13px var(--display);color:var(--mute)}
 .lvl{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);font:600 13px var(--display)}
@@ -743,6 +749,7 @@ const mapName = id => { const k = String(id || "").replace(/^de_/, ""); return D
 const mget = p => fetch(MT.api + p).then(r => r.ok ? r.json() : Promise.reject(r.status));
 async function matchLoad(id){
   if(!id) return;
+  if(MT.cur !== id) MT.focus = null;
   MT.cur = id; if(V.view === "match") paintPage();
   for(let i = 0; i < 3 && MT.cur === id; i++){   // one retry after a short pause: a first build of a match failed once in testing
     try { MT.data[id] = await mget(`/match/${id}`); MT.err = ""; break; } catch(e){ MT.err = "Нет ответа от сервера матчей"; await new Promise(ok => setTimeout(ok, 2000)); }
@@ -765,15 +772,34 @@ async function matchPoll(first){
   if(fresh || first && Date.now() - Date.parse(last.at) < 3*3600e3 || MT.cur === last.id) matchLoad(last.id);
 }
 const pct = (v, d=0) => v === null || v === undefined ? "—" : (v*100).toFixed(d) + "%";
-// a side's record per map: [win rate, games] over its five, lifetime and the last 20 matches
+// a side per map: lifetime over its five (games, win rate) and the last 30 matches of each (games, wins)
 function sideMaps(t){
-  const out = {};
+  const out = {}, o = m => out[m] ||= {g:0, w:0, rg:0, rw:0};
   for(const p of t.players){
-    for(const [m, [g, w]] of Object.entries(p.maps || {})){ const o = out[m] ||= {g:0, w:0, rg:0, rw:0}; o.g += g || 0; o.w += (g || 0) * (w || 0) / 100; }
-    for(const [m, [w, g]] of Object.entries(p.last || {})){ const o = out[m] ||= {g:0, w:0, rg:0, rw:0}; o.rg += g; o.rw += w; }
+    for(const [m, s] of Object.entries(p.maps || {})){ const x = o(m); x.g += s.g || 0; x.w += (s.g || 0) * (s.w || 0) / 100; }
+    for(const r of p.recentGames || []){ const x = o(r.map); x.rg++; x.rw += r.r; }
   }
   return out;
 }
+// players who played the same recent matches on one team: a party (two or more shared matches)
+function stacks(t){
+  const ps = t.players, seen = {};
+  ps.forEach((p, i) => (p.recentGames || []).forEach(r => (seen[r.m + "|" + r.team] ||= {r, who:[]}).who.push(i)));
+  const up = ps.map((_, i) => i), find = i => up[i] === i ? i : (up[i] = find(up[i])), pair = {};
+  for(const s of Object.values(seen)) for(let a = 0; a < s.who.length; a++) for(let b = a+1; b < s.who.length; b++){ const k = s.who[a] + "-" + s.who[b]; pair[k] = (pair[k] || 0) + 1; }
+  for(const [k, n] of Object.entries(pair)) if(n >= 2){ const [a, b] = k.split("-").map(Number); up[find(a)] = find(b); }
+  const groups = {};
+  ps.forEach((p, i) => (groups[find(i)] ||= []).push(i));
+  return Object.values(groups).filter(g => g.length > 1).map(g => {
+    const games = Object.values(seen).filter(s => s.who.filter(i => g.includes(i)).length >= 2).map(s => s.r);
+    const maps = {};
+    for(const r of games){ const x = maps[r.map] ||= [0, 0]; x[0] += r.r; x[1]++; }
+    return {who:g.map(i => ps[i].nick), games:games.length, wins:games.reduce((a, r) => a + r.r, 0), maps};
+  }).sort((a, b) => b.who.length - a.who.length);
+}
+// a side's rate on a map: the last 30 matches when there are 5 or more games there, else lifetime with 3 or more
+const sideRate = x => !x ? null : x.rg >= 5 ? x.rw / x.rg : x.g >= 3 ? x.w / x.g : null;
+const rateTxt = x => !x ? "—" : x.rg >= 5 ? `${pct(x.rw/x.rg)} <span title="Побед из последних 30 матчей каждого">${x.rw}/${x.rg}</span>` : x.g >= 3 ? `${pct(x.w/x.g)} <span title="За всё время, матчей у пятёрки">${x.g}</span>` : `<span>${x.g || 0}</span>`;
 function matchView(){
   const id = MT.cur, a = MT.data[id];
   const when = t => { const d = new Date(t*1000); return d.toLocaleDateString("ru", {day:"2-digit", month:"2-digit"}) + " " + d.toLocaleTimeString("ru", {hour:"2-digit", minute:"2-digit"}); };
@@ -782,21 +808,47 @@ function matchView(){
   if(MT.err && !a) return h + `<p class="mnote">${MT.err}</p>`;
   if(!a) return h + `<p class="mnote">Загрузка…</p>`;
   if(!a.them || !a.them.players.length) return h + `<p class="mnote">${MSTAT[a.status] || a.status}: составов ещё нет</p>`;
+  if(!a.them.players[0].recentGames) return h + `<p class="mnote">Загрузка…</p>`;
+  const T = sideMaps(a.them), U = sideMaps(a.us), ST = stacks(a.them), SU = stacks(a.us);
+  const pool = a.pool.length ? a.pool : Object.keys(T);
+  const rows = pool.map(m => { const t = sideRate(T[m]), u = sideRate(U[m]); return {m, t:T[m], u:U[m], gap: t !== null && u !== null ? u - t : null, cold: !(T[m]?.rg)}; });
+  const ok = rows.filter(r => r.gap !== null);
+  const best = ok.length ? ok.reduce((x, y) => y.gap > x.gap ? y : x) : null, worst = ok.length ? ok.reduce((x, y) => y.gap < x.gap ? y : x) : null;
   const k = String(a.map || "").replace(/^de_/, "");
+  const focus = MT.focus && pool.includes(MT.focus) ? MT.focus : a.map || best?.m || pool[0];
+  // verdict
+  const why = r => { const t = sideRate(r.t), u = sideRate(r.u); return `мы ${pct(u)}, они ${pct(t)}`; };
+  const big = ST[0];
   h += `<div class="mtop"><div class="mmap">${a.map ? esc(mapName(a.map)) : MSTAT[a.status] || a.status}</div>
     ${a.score ? `<div class="mscore ${a.score[0] > a.score[1] ? "win" : "loss"}">${a.score[0]} : ${a.score[1]}</div>` : `<div class="chip">${MSTAT[a.status] || a.status}</div>`}
     ${a.us?.win != null ? `<div class="chip" title="Шанс победы по FACEIT">${pct(a.us.win)} : ${pct(a.them.win)}</div>` : ""}
-    ${a.map && DATA.maps[k] ? `<button class="btn" data-gomap="${k}">${icon("map")}Раскидка</button>` : ""}</div>`;
+    ${a.map && DATA.maps[k] ? `<button class="btn" data-gomap="${k}">${icon("map")}Раскидка</button>` : ""}</div>
+    <div class="verdict">
+      ${best && best.gap > 0 ? `<div class="vrow"><span class="tag pick">БЕРЁМ</span><b>${esc(mapName(best.m))}</b><span>${why(best)}</span></div>` : ""}
+      ${worst && worst.gap < 0 ? `<div class="vrow"><span class="tag ban">БАНИМ</span><b>${esc(mapName(worst.m))}</b><span>${why(worst)}</span></div>` : ""}
+      ${rows.filter(r => r.cold).length ? `<div class="vrow"><span class="tag cold">НЕ ИГРАЮТ</span><b>${rows.filter(r => r.cold).map(r => esc(mapName(r.m))).join(", ")}</b><span>скорее всего, забанят сами</span></div>` : ""}
+      ${big ? `<div class="vrow"><span class="tag">${icon("users")}ПАЧКА</span><b>${big.who.map(esc).join(" + ")}</b><span>${big.games} матчей вместе, побед ${pct(big.wins/big.games)}</span></div>` : `<div class="vrow"><span class="tag">${icon("user")}</span><span>Играют поодиночке: общих матчей нет</span></div>`}
+    </div>`;
   // maps
-  const T = sideMaps(a.them), U = sideMaps(a.us), rate = o => o && o.g ? o.w / o.g : null;
-  const rows = (a.pool.length ? a.pool : Object.keys(T)).map(m => ({m, t:T[m], u:U[m], gap: rate(U[m]) !== null && rate(T[m]) !== null ? rate(U[m]) - rate(T[m]) : null}));
-  const ok = rows.filter(r => r.gap !== null && r.t.g >= 3 && r.u.g >= 3);
-  const best = ok.length ? ok.reduce((x, y) => y.gap > x.gap ? y : x) : null, worst = ok.length ? ok.reduce((x, y) => y.gap < x.gap ? y : x) : null;
-  const cell = o => o ? `<b>${pct(rate(o))}</b> <span title="Матчей у пятёрки за всё время">${o.g}</span>${o.rg ? ` <span class="mrec" title="Побед из последних 20 матчей каждого">${o.rw}/${o.rg}</span>` : ""}` : "—";
-  h += `<div class="mscroll"><table class="mmaps"><thead><tr><th>Карта</th><th>Они</th><th>Мы</th><th title="Наш процент побед минус их">±</th><th></th></tr></thead><tbody>${rows.map(r =>
-    `<tr${r.m === a.map ? ` class="picked"` : ""}><td>${esc(mapName(r.m))}</td><td>${cell(r.t)}</td><td>${cell(r.u)}</td><td class="${r.gap > 0 ? "up" : r.gap < 0 ? "dn" : ""}">${r.gap === null ? "—" : (r.gap > 0 ? "+" : "") + Math.round(r.gap*100)}</td><td>${r === best && best.gap > 0 ? `<span class="tag pick">ПИК</span>` : r === worst && worst.gap < 0 ? `<span class="tag ban">БАН</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
-  // players
-  const team = (t, enemy) => {
+  const stackCell = m => { const s = big?.maps[m]; return s ? `${s[0]}/${s[1]}` : "—"; };
+  h += `<div class="mscroll"><table class="mmaps"><thead><tr><th>Карта</th><th>Они</th>${big ? `<th title="Их пачка в общих матчах: побед из игр">Пачка</th>` : ""}<th>Мы</th><th title="Наш процент побед минус их">±</th><th></th></tr></thead><tbody>${rows.map(r =>
+    `<tr class="${r.m === a.map ? "picked" : ""}${r.m === focus ? " focus" : ""}" data-mmap="${r.m}"><td>${esc(mapName(r.m))}</td><td>${rateTxt(r.t)}</td>${big ? `<td>${stackCell(r.m)}</td>` : ""}<td>${rateTxt(r.u)}</td><td class="${r.gap > 0 ? "up" : r.gap < 0 ? "dn" : ""}">${r.gap === null ? "—" : (r.gap > 0 ? "+" : "") + Math.round(r.gap*100)}</td><td>${r === best && best.gap > 0 ? `<span class="tag pick">ПИК</span>` : r === worst && worst.gap < 0 ? `<span class="tag ban">БАН</span>` : r.cold ? `<span class="tag cold" title="Никто из них не играл её в последних 30 матчах">НЕ ИГРАЮТ</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
+  // who is dangerous on the focused map
+  const onMap = (t, enemy) => {
+    const ps = t.players.map(p => ({p, s: p.maps?.[focus] || null, r: (p.recentGames || []).filter(x => x.map === focus)}));
+    const has = ps.filter(x => x.s && x.s.g >= 3);
+    const top = f => has.length ? has.reduce((x, y) => f(y) > f(x) ? y : x) : null;
+    const awp = top(x => x.s.awp || 0), ent = top(x => x.s.entry[0] || 0), kd = top(x => x.s.kd || 0);
+    const chips = [awp && awp.s.awp >= .1 ? `<span class="chip">${icon("crosshair")}AWP: <b>${esc(awp.p.nick)}</b> ${pct(awp.s.awp)} убийств</span>` : "",
+      ent ? `<span class="chip">${icon("zap")}Заходит первым: <b>${esc(ent.p.nick)}</b> ${pct(ent.s.entry[0])} раундов</span>` : "",
+      kd ? `<span class="chip">${icon("flame")}Лучший K/D: <b>${esc(kd.p.nick)}</b> ${kd.s.kd}</span>` : ""].join("");
+    const row = x => `<tr><td class="nick">${esc(x.p.nick)}</td><td>${x.s ? x.s.g : 0}</td><td>${x.s && x.s.g ? x.s.w + "%" : "—"}</td><td>${x.r.length ? `${x.r.reduce((a, y) => a + y.r, 0)}/${x.r.length}` : "—"}</td><td>${x.s?.kd ?? "—"}</td><td>${x.s?.adr ? Math.round(x.s.adr) : "—"}</td><td>${x.s ? pct(x.s.awp) : "—"}</td><td>${x.s ? pct(x.s.entry[0]) : "—"}</td><td>${x.s ? pct(x.s.clutch) : "—"}</td></tr>`;
+    return `<section class="mteam ${enemy ? "them" : "us"}"><h2>${enemy ? "Соперники" : "Мы"} на ${esc(mapName(focus))}</h2><div class="mchips">${chips}</div>
+      <table><thead><tr><th>Ник</th><th title="Матчей на карте за всё время">Матчей</th><th>Побед</th><th title="Побед из игр на карте в последних 30 матчах">Недавно</th><th>K/D</th><th>ADR</th><th title="Доля убийств с AWP">AWP</th><th title="Доля раундов, где он первым идёт в дуэль">Заход</th><th title="Побед 1 на 1">1v1</th></tr></thead><tbody>${ps.map(row).join("")}</tbody></table></section>`;
+  };
+  h += onMap(a.them, true) + onMap(a.us, false);
+  // players overall
+  const team = (t, enemy, st) => {
     const top = t.players.reduce((x, p) => (p.sniper || 0) > (x?.sniper || 0) ? p : x, null);
     const row = p => {
       const roles = [
@@ -805,23 +857,26 @@ function matchView(){
         p.entry[0] > .25 && p.entry[1] > .55 ? `<span title="Заходит первым: ${pct(p.entry[0])} раундов, успешно ${pct(p.entry[1])}">${icon("zap")}</span>` : "",
         p.flash[0] > .4 && p.flash[1] > .5 ? `<span title="Флешки: ${p.flash[0]} за раунд, удачных ${pct(p.flash[1])}">${icon("sun")}</span>` : "",
         p.clutch > .4 ? `<span title="1 на 1 выигрывает ${pct(p.clutch)}">${icon("shield")}</span>` : "",
+        st.some(s => s.who.includes(p.nick)) ? `<span title="В пачке">${icon("users")}</span>` : "",
         p.bans ? `<span class="warn" title="Баны на FACEIT: ${p.bans}">${icon("ban")}</span>` : "",
       ].join("");
       const form = (p.recent || []).map(r => `<i class="fd ${r === "1" ? "w" : "l"}"></i>`).join("");
+      const rw = (p.recentGames || []).reduce((x, y) => x + y.r, 0), rn = (p.recentGames || []).length;
       return `<tr><td><span class="lvl l${p.level}">${p.level ?? "?"}</span></td><td class="nick"><a href="https://www.faceit.com/ru/players/${encodeURIComponent(p.nick)}" target="_blank" rel="noopener">${esc(p.nick)}</a></td>
-        <td>${p.elo ?? "—"}</td><td class="form" title="Последние 5 матчей">${form}</td><td title="K/D за всё время; за последние 20: ${p.lastKd ?? "—"}">${p.kd ?? "—"}</td><td>${p.adr ? Math.round(p.adr) : "—"}</td><td>${p.hs ?? "—"}%</td>
+        <td>${p.elo ?? "—"}</td><td class="form" title="Последние 5 матчей">${form}</td><td title="Побед из последних 30 матчей">${rn ? `${rw}/${rn}` : "—"}</td><td title="K/D за последние 30 матчей; за всё время ${p.kd ?? "—"}">${p.lastKd ?? "—"}</td><td>${p.adr ? Math.round(p.adr) : "—"}</td><td>${p.hs ?? "—"}%</td>
         <td title="Матчей на FACEIT, аккаунт с ${p.since ?? "?"} года">${p.matches ?? "—"}${p.since ? ` · ${p.since}` : ""}</td><td class="roles">${roles}</td></tr>`;
     };
-    return `<section class="mteam ${enemy ? "them" : "us"}"><h2>${enemy ? "Соперники" : "Мы"}${t.premade ? ` <span class="chip" title="Пришли пачкой">${icon("users")}</span>` : ""}<span class="mavg">${t.rating ? `Elo ${t.rating}` : ""}</span></h2>
-      <table><thead><tr><th>Ур.</th><th>Ник</th><th>Elo</th><th>Форма</th><th>K/D</th><th>ADR</th><th>HS</th><th>Матчей</th><th></th></tr></thead><tbody>${t.players.map(row).join("")}</tbody></table></section>`;
+    return `<section class="mteam ${enemy ? "them" : "us"}"><h2>${enemy ? "Соперники" : "Мы"}<span class="mavg">${t.rating ? `Elo ${t.rating}` : ""}</span></h2>
+      <table><thead><tr><th>Ур.</th><th>Ник</th><th>Elo</th><th>Форма</th><th>30 игр</th><th>K/D</th><th>ADR</th><th>HS</th><th>Матчей</th><th></th></tr></thead><tbody>${t.players.map(row).join("")}</tbody></table></section>`;
   };
-  return h + team(a.them, true) + team(a.us, false);
+  return h + team(a.them, true, ST) + team(a.us, false, SU);
 }
 function paintPage(){
   const body = {cfg:cfgView, nades:nadesView, match:matchView}[V.view]();
   page.innerHTML = header() + `<div class="pin">${body}</div>`;
   draw();
 }
+page.addEventListener("click", e => { const r = e.target.closest("[data-mmap]"); if(r){ MT.focus = r.dataset.mmap; paintPage(); } });
 page.addEventListener("click", e => {
   const b = e.target.closest("button"); if(!b) return;
   if(b.dataset.mid){ matchLoad(b.dataset.mid); return; }
