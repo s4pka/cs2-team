@@ -744,7 +744,9 @@ const mget = p => fetch(MT.api + p).then(r => r.ok ? r.json() : Promise.reject(r
 async function matchLoad(id){
   if(!id) return;
   MT.cur = id; if(V.view === "match") paintPage();
-  try { MT.data[id] = await mget(`/match/${id}`); MT.err = ""; } catch(e){ MT.err = "Нет ответа от сервера матчей"; }
+  for(let i = 0; i < 3 && MT.cur === id; i++){   // one retry after a short pause: a first build of a match failed once in testing
+    try { MT.data[id] = await mget(`/match/${id}`); MT.err = ""; break; } catch(e){ MT.err = "Нет ответа от сервера матчей"; await new Promise(ok => setTimeout(ok, 2000)); }
+  }
   if(V.view === "match" && MT.cur === id) paintPage();
 }
 async function matchOpen(){
