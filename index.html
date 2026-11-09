@@ -181,6 +181,8 @@ img,svg image{-webkit-user-drag:none}
 .okd{margin-left:auto;font:600 20px var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}.okd small{font-size:11px;color:var(--mute);margin-right:4px}
 @media (max-width:760px){.mcb{min-height:110px;padding:14px;flex-wrap:wrap;gap:10px 14px}.mcb .mmap{font-size:26px}.mcb .sp{flex-basis:100%;height:0}
   .op{flex-wrap:wrap;gap:8px 10px}.oroles{order:3;flex-basis:100%}.oroles:empty{display:none}}
+.mplan{display:grid;gap:4px;padding:4px 2px}
+.mpl{display:flex;align-items:center;gap:0;font-weight:600;font-size:15px}.mpl .mst svg{width:17px;height:17px;color:#ef6b5b;display:block}
 .mside{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:4px 0}.mside .seg{background:var(--panel);border-radius:9px}.mside .seg:hover{background:var(--raise)}
 .mst{font:600 13px var(--display);letter-spacing:.12em;width:34px}.mst.t{color:#e9b75a}.mst.ct{color:#6fa8dc}
 .mtop{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
@@ -897,6 +899,16 @@ function vetoView(a){
    this map when he has 3 or more matches on it (a dashed row otherwise: his stats over all maps). AWP by Faceit Scope's
    score sniperRate*500 + adr*0.3 + (kd-1)*30, shown only at a sniper kill rate of 10 % or more (Claude's cut); clutch by
    Faceit Scope's 1v1 win rate above 40 % (vault/raw/cs2-faceit-2026-11-09/match-info.md rows 15-18). */
+/* Plan lines, only those two or more independent coaches state (vault/raw/cs2-map-gameplan-2026-11-09/report.md):
+   vs an AWPer, flash or smoke before a peek and peek in pairs (CoJoMo WXJcgzWMOos, Dirt Schlurpy oGHIJ8TNmNg, Hecklerr
+   M73YerGO__U); the T take per map vs their AWPer on Dust 2 (MetaBot, bo3.gg, crosshairforge), Mirage (Hecklerr,
+   v1dma, MetaBot) and Nuke (MetaBot, bo3.gg); CT keeps utility for their hit and the retake (EliGE eXA-V_GsT9c and
+   2hfxssHVYr0, MetaBot). */
+const PLAN = {awp:"Без флешки на AWP не выглядываем, выходим по двое",
+  dust2:"Смок на мид-двери; лонг — только со смоком и флешками",
+  mirage:"Смоки на окно и топ-мид, флешки на шорт и коннектор",
+  nuke:"Стенка смоков на улице и смок на красный контейнер",
+  ct:"Гранаты бережём на их заход и ретейк"};
 function mapCard(a, m, chance){
   const k = m.replace(/^de_/, ""), lineups = !!DATA.maps[k];
   const st = p => { const s = p.maps?.[m]; return s && s.g >= 3 ? {...s, own:true} : {g:s?.g || 0, w:s?.w, kd:p.kd, adr:p.adr, awp:p.sniper, entry:p.entry, flash:p.flash, clutch:p.clutch, own:false}; };
@@ -916,11 +928,13 @@ function mapCard(a, m, chance){
       <span class="oroles">${x.r.map(([i, w, c]) => `<span class="orole ${c}">${icon(i)}${w}</span>`).join("")}</span>
       <span class="okd"><small>K/D</small>${x.s.kd ?? "—"}</span></div>`;
   }).join("");
+  const plan = [awp.r.length ? ["crosshair", "", PLAN.awp] : null, awp.r.length && PLAN[k] ? ["crosshair", "t", PLAN[k]] : null, ["shield", "ct", PLAN.ct]].filter(Boolean)
+    .map(([i, sd, t]) => `<div class="mpl">${sd ? `<span class="mst ${sd}">${sd.toUpperCase()}</span>` : `<span class="mst">${icon(i)}</span>`}<span>${t}</span></div>`).join("");
   const score = a.map === m && a.score ? `<span class="mscore ${a.score[0] > a.score[1] ? "win" : "loss"}">${a.score[0]}:${a.score[1]}</span>` : "";
   return `<section class="mc"><div class="mcb" style="--img:url(maps/${k}.webp)">
       <span class="mmap">${esc(mapName(m))}</span><span class="vbig" title="Наш шанс на победу">${Math.round(chance*100)}<small>%</small></span>${score}<span class="sp"></span>
       ${lineups ? `<button class="btn" data-go="board:${k}">${icon("pencil-ruler")}Доска</button>` : ""}
-    </div><div class="ops">${rows}</div>${lineups ? ["t", "ct"].map(sd => `<div class="mside"><span class="mst ${sd}">${sd.toUpperCase()}</span>${(L.maps[k].sides[sd] || []).map((c, i) => c.items.length ? `<button class="seg" data-gocat="${k}:${sd}:${i}">${esc(c.name)}</button>` : "").join("")}</div>`).join("") : ""}</section>`;
+    </div><div class="mplan">${plan}</div><div class="ops">${rows}</div>${lineups ? ["t", "ct"].map(sd => `<div class="mside"><span class="mst ${sd}">${sd.toUpperCase()}</span>${(L.maps[k].sides[sd] || []).map((c, i) => c.items.length ? `<button class="seg" data-gocat="${k}:${sd}:${i}">${esc(c.name)}</button>` : "").join("")}</div>`).join("") : ""}</section>`;
 }
 function matchView(){
   const id = MT.cur, a = MT.data[id];
