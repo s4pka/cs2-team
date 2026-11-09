@@ -752,6 +752,17 @@ function loadBoard(){
   if(!b){ const old = store(s => JSON.parse(s.getItem("cs2board:" + S.map) || "null"), null);
     b = {steps:[{o: Array.isArray(old) && D.fit ? old.map(o => fromOld(o, D.fit)).filter(Boolean) : [], note:""}]}; }
   BD.steps = Array.isArray(b.steps) && b.steps.length ? b.steps : [{o:[], note:""}];
+  if(L.fb) FB.ready.then(openTeam);
+}
+/* the team board: one shared board per map that the board opens by default, so everyone on the site sees and edits
+   the same drawing live; it is made the first time anyone opens it. A board from a link or the list still opens instead. */
+const TEAM = () => "team-" + S.map;
+async function openTeam(){
+  const m = S.map, id = TEAM(); if(BD.doc || BD.shared || V.bid || V.code) return;
+  const ref = FB.db.doc("boards/" + id), sn = await ref.get().catch(() => null); if(!sn) return;
+  if(!sn.exists) await ref.set({map:m, name:"Общая", data:JSON.stringify([{o:[], note:""}]), t:Date.now(), by:BD.by}).catch(() => {});
+  if(S.map !== m || BD.doc || BD.shared) return;
+  openBoard(id);
 }
 function saveBoard(){ if(BD.doc){ queueSave(); return; } if(!BD.shared) store(s => s.setItem(BKEY(), JSON.stringify({steps:BD.steps}))); }
 const snap = () => JSON.stringify({steps:BD.steps, cur:BD.cur});
@@ -779,7 +790,7 @@ function cone(o, w, c){
   return `<path d="M0 0L${P(a-h)}A${R} ${R} 0 0 1 ${P(a+h)}Z" fill="${c}" fill-opacity=".22" stroke="${c}" stroke-opacity=".7" stroke-width="${w*.4}" pointer-events="none"/>`;
 }
 function obj(o, i){
-  const w = LW(), k = `data-i="${i}"${i === BD.sel ? ` class="bsel"` : ""}`;
+  const w = LW(), k = `data-i="${i}"${i >= 0 && i === BD.sel ? ` class="bsel"` : ""}`;
   if(o.t === "line" || o.t === "arrow"){
     let head = "";
     if(o.t === "arrow" && o.p.length > 1){ const a = o.p.at(-2), b = o.p.at(-1), ang = Math.atan2(b[1]-a[1], b[0]-a[0]), h = w*4.5;
@@ -791,11 +802,13 @@ function obj(o, i){
   if(o.t === "circ") return `<circle ${k} cx="${o.x}" cy="${o.y}" r="${o.r}" fill="${o.c}" fill-opacity=".14" stroke="${o.c}" stroke-width="${w*.8}"/>`;
   if(o.t === "text") return `<text ${k} x="${o.x}" y="${o.y}" fill="${o.c}" font-size="${w*5.2}" font-weight="600" font-family="Golos Text,system-ui,sans-serif" stroke="#0b0e10" stroke-width="${w*1.3}" paint-order="stroke" dominant-baseline="middle">${esc(o.s)}</text>`;
   const live = turnable(o) && !o.dead;
-  const g = (inner, c) => `<g ${k} transform="translate(${o.x} ${o.y})">${live ? cone(o, w, c) : ""}${inner}${live && i === BD.sel && BD.tool === "select" ? handle(o, i, w) : ""}</g>`;
+  const g = (inner, c) => `<g ${k} transform="translate(${o.x} ${o.y})">${live ? cone(o, w, c) : ""}${inner}${live && i >= 0 && i === BD.sel && BD.tool === "select" ? handle(o, i, w) : ""}</g>`;
   const dead = r => { const s = r*1.3/12; return `<circle r="${r}" fill="#0b0e10" stroke="#8b98a2" stroke-width="${w*.7}"/><g transform="translate(${-12*s} ${-12*s}) scale(${s})" fill="none" stroke="#e7ecef" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${skull()}</g>`; };   // every dead mark looks the same: white skull, grey ring
   // what a player carries: the bomb as a badge, grenades as a strip under the token (as boltobserv marks the carrier)
   const kit = (r) => (o.c4 ? `<circle cx="${r1(r*.8)}" cy="${r1(-r*.8)}" r="${r1(w*1.9)}" fill="#0b0e10" stroke="#ff5148" stroke-width="${w*.4}"/><image href="${NI.c4}" x="${r1(r*.8-w*1.3)}" y="${r1(-r*.8-w*1.3)}" width="${r1(w*2.6)}" height="${r1(w*2.6)}"/>` : "") + invPill(o.inv, 0, r + w*3.4);
-  if(o.t === "tok") return g(blindRing(blinded(o), w*3.6, w) + (o.dead ? dead(w*3.6) : `<circle r="${w*3.6}" fill="${o.c}" stroke="#0b0e10" stroke-width="${w*.8}"/><text text-anchor="middle" dy=".35em" font-size="${w*4.4}" font-weight="700" font-family="system-ui,sans-serif" fill="#0b0e10">${o.n}</text>`) + kit(w*3.6), o.c);
+  // with the lineups tool, the player who gets the next lineup wears a white ring
+  const who = o.t === "tok" && BD.tool === "pick" && !BD.play && i >= 0 && o.n === Math.min(BD.color, 4)+1 ? `<circle r="${r1(w*5.2)}" fill="none" stroke="#fff" stroke-width="${r1(w*.6)}" stroke-dasharray="${r1(w*1.2)} ${r1(w*.8)}"/>` : "";
+  if(o.t === "tok") return g(who + blindRing(blinded(o), w*3.6, w) + (o.dead ? dead(w*3.6) : `<circle r="${w*3.6}" fill="${o.c}" stroke="#0b0e10" stroke-width="${w*.8}"/><text text-anchor="middle" dy=".35em" font-size="${w*4.4}" font-weight="700" font-family="system-ui,sans-serif" fill="#0b0e10">${o.n}</text>`) + kit(w*3.6), o.c);
   if(o.t === "foe") return g(blindRing(blinded(o), w*3.2, w) + (o.dead ? dead(w*3.2) : `<circle r="${w*3.2}" fill="#0b0e10" stroke="#ff5148" stroke-width="${w*1.1}"/><circle r="${w*1.1}" fill="#ff5148"/>`), "#ff5148");
   if(o.t === "c4"){ const r = w*3.6; return g(`<circle r="${r}" fill="#0b0e10" stroke="#ff5148" stroke-width="${w*.8}"/><image href="${NI.c4}" x="${-r*.7}" y="${-r*.7}" width="${r*1.4}" height="${r*1.4}"/>`); }
   if(o.t === "dead") return g(dead(w*3.2));
@@ -808,10 +821,13 @@ function obj(o, i){
     const hops = (o.b || []).map(q => `<circle cx="${q[0]}" cy="${q[1]}" r="${r1(w*.9)}" fill="#0b0e10" stroke="${c}" stroke-width="${r1(w*.4)}"/>`).join("");
     return `<g ${k}><g opacity=".5"><path d="${path}" fill="none" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round" stroke-linejoin="round"/><path d="${path}" fill="none" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/></g>${hops}
       ${blast(o.k, o.lx, o.ly, o.id)}
-      ${BD.grouped && BD.grouped.has(i) ? "" : `<g${o.ref ? ` data-ts="1" style="cursor:pointer"` : ""}><circle cx="${o.tx}" cy="${o.ty}" r="${rt}" fill="#0e1216" stroke="${open ? "#f0b443" : c}" stroke-width="${w*(open ? .8 : .5)}"/>${nglyph(o.k, o.tx, o.ty, rt*1.45)}</g>`}</g>`;
+      ${BD.grouped && BD.grouped.has(i) ? "" : `<g${o.ref ? ` data-ts="1" style="cursor:pointer"` : ""}><circle cx="${o.tx}" cy="${o.ty}" r="${rt}" fill="#0e1216" stroke="${open ? "#f0b443" : c}" stroke-width="${w*(open ? .8 : .5)}"/>${nglyph(o.k, o.tx, o.ty, rt*1.45)}</g>`}${o.by ? byBadge(o, rt, w) : ""}</g>`;
   }
   return "";
 }
+// who throws it: the player's number in his colour beside the landing
+function byBadge(o, rt, w){ const x = r1(o.lx + rt*1.3), y = r1(o.ly - rt*1.3), r = r1(Math.max(w*2, rt*.8));
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="${COLORS[o.by-1]}" stroke="#0b0e10" stroke-width="${r1(w*.5)}"/><text x="${x}" y="${y}" dy=".35em" text-anchor="middle" font-size="${r1(r*1.25)}" font-weight="700" font-family="system-ui,sans-serif" fill="#0b0e10">${o.by}</text>`; }
 /* a flight bowed sideways by a sine (0 at the ends, most in the middle) to suggest the arc, as cs2d draws grenade paths
    (useGrenadeRendering.ts, drawGrenadePathPreview: amplitude min(4 % of the length, 14 px)); each hop between bounces bows on its own */
 function bow(pts){
@@ -853,7 +869,11 @@ function groupLayer(groups){
       return `<line x1="${x}" y1="${y}" x2="${px}" y2="${py}" stroke="#e7ecef" stroke-opacity=".35" stroke-width="${r1(w*.35)}"/><g data-i="${i}" data-ts="1" style="cursor:pointer"><circle cx="${px}" cy="${py}" r="${r1(rt*1.5)}" fill="transparent"/><circle cx="${px}" cy="${py}" r="${rt}" fill="#0e1216" stroke="${open ? "#f0b443" : NC[o.k]}" stroke-width="${r1(w*(open ? .8 : .5))}"/>${nglyph(o.k, px, py, rt*1.45)}<title>${esc((D.items.find(it => it.k === o.ref) || {}).to || "")}</title></g>`; }).join("");
   }).join("");
 }
-function boardSvg(){ const gs = lnGroups(); BD.grouped = new Set(gs.flatMap(g => g.m)); BD.smokes = smokesNow(); const s = objs().map(obj).join("") + putOut() + groupLayer(gs); BD.grouped = BD.smokes = null; return s; }
+// players and enemies are drawn over the marks and lineups, so a player standing on a throw spot stays visible
+function boardSvg(){ const gs = lnGroups(), list = objs(), up = o => turnable(o) ? 1 : 0; BD.grouped = new Set(gs.flatMap(g => g.m)); BD.carry = carried(BD.cur); BD.smokes = smokesNow();
+  const s = walkLayer() + BD.carry.map(o => o.t === "ln" ? blast(o.k, o.lx, o.ly, o.id) : blast(o.k, o.x, o.y, o.id)).join("") +
+    list.map((o, i) => i).sort((a, b) => up(list[a]) - up(list[b])).map(i => obj(list[i], i)).join("") + putOut() + groupLayer(gs);
+  BD.grouped = BD.smokes = BD.carry = null; return s; }
 /* Walls: the awpy-data collision and nav meshes (book/geo: build_geo.py makes the data, geo.js answers in a worker).
    Answers come later than the paint that asks; each is cached by what it depends on and the board paints again.
    One question per slot at a time, so a drag never queues more than the latest. */
@@ -890,7 +910,7 @@ function footMask(kind, x, y){
 }
 // what a player facing o.a sees: 90° to 2000 units, cut by walls and smokes
 function viewPoly(o){
-  if(!GEO.ok || o.a === undefined || o.a === null) return null;
+  if(!GEO.ok || BD.play || o.a === undefined || o.a === null) return null;   // while the round plays, the plain cone
   const r = geoAsk(`v${o.x},${o.y},${o.a}`, () => GEO.g.viewPolygon([o.x, o.y], o.a, 90, 2000/(D.scale || 5)), "v" + (keyOf(o) || o.x));
   return r && r.poly ? r.poly : null;
 }
@@ -899,7 +919,7 @@ function viewPoly(o){
    Distance also shortens it, without published numbers, so it isn't counted. */
 function flashesNow(){ const out = []; objs().forEach(o => { if(o.t === "nade" && o.k === "flash") out.push([o.x, o.y]); if(o.t === "ln" && o.k === "flash") out.push([o.lx, o.ly]); }); return out; }
 function blinded(o){
-  if(!GEO.ok || o.dead) return 0; let best = 0;
+  if(!GEO.ok || BD.play || o.dead) return 0; let best = 0;
   for(const [fx, fy] of flashesNow()){
     const see = geoAsk(`b${o.x},${o.y}|${fx},${fy}`, () => GEO.g.visible([o.x, o.y], [fx, fy], {heightB:60}), `b${keyOf(o) || o.x}|${fx},${fy}`); if(!see) continue;
     if(o.a === undefined || o.a === null){ best = Math.max(best, 1); continue; }
@@ -1000,7 +1020,7 @@ function fxImg(kind, seed){
 }
 // a fire whose middle is inside a smoke is put out, as in the game (a smoke puts out fire under it, a molotov in a smoke goes out)
 function smokesNow(){ const u = 1/(D.scale || 5), R = BLAST.smoke*u, out = [];
-  objs().forEach(o => { if(o.t === "nade" && o.k === "smoke") out.push([o.x, o.y]); if(o.t === "ln" && o.k === "smoke") out.push([o.lx, o.ly]); });
+  [...objs(), ...(BD.carry || carried(BD.cur))].forEach(o => { if(o.t === "nade" && o.k === "smoke") out.push([o.x, o.y]); if(o.t === "ln" && o.k === "smoke") out.push([o.lx, o.ly]); });
   return {R, at: out}; }
 function blast(kind, x, y, seed){
   const u = 1/(D.scale || 5), w = LW(), P = (d, a) => [r1(x + d*Math.cos(a)), r1(y + d*Math.sin(a))];
@@ -1057,6 +1077,7 @@ function paint(){
   if(V.view !== "board") { $("objs").innerHTML = $("pickg").innerHTML = ""; return; }
   infoCards(); BD.pz = base*S.z; geoLoad(); geoSmokes();
   paintList(boardSvg() + (BD.drag && BD.drag.ghost ? obj(BD.drag.ghost, -1) : ""));
+  const tm = !BD.timing && !BD.play && document.querySelector("#bsteps .tm"); if(tm){ const h = timeChip().replace(/^<button[^>]*>|<\/button>$/g, ""); if(h.startsWith("<span") && tm.innerHTML !== h) tm.innerHTML = h; }   // walk times arrive after the paint
   $("pickg").innerHTML = BD.tool === "pick" && !BD.play ? pickLayer() : BD.tool === "throw" && BD.th ? throwGhost() : BD.tool === "run" && BD.th && BD.thTo ? runLayer({a:BD.th, b:BD.thTo, id:"ghost"}, LW()).replace(/<text[\s\S]*$/, "") : "";
 }
 
@@ -1079,6 +1100,7 @@ function boardDown(e){
     if(turnable(o)){ push(); BD.drag = {turn:i}; cap(); return false; }
     return true; }
   if(e.button !== 0) return false;
+  if(BD.tool === "pick" && o && o.t === "tok" && !e.target.closest("#pickg [data-pc],#pickg [data-pi]")){ BD.color = o.n-1; boardUI(); return false; }   // who throws next
   const pm = BD.tool === "pick" && e.target.closest("#pickg [data-pc],#pickg [data-pi]");
   if(pm){ BD.drag = {pick: pm.dataset.pi !== undefined ? {pi:+pm.dataset.pi} : {pc:+pm.dataset.pc}}; cap(); return false; }
   const tg = e.target.closest("[data-tg]"), h = e.target.closest("[data-h]");
@@ -1090,7 +1112,7 @@ function boardDown(e){
   const fixed = i >= 0 && o.t === "ln" && o.ref, ts = !!e.target.closest("[data-ts]");
   if(fixed && (BD.tool === "select" || ts && BD.tool === "pick")){ BD.fixedDown = {i, ts}; return true; }
   // only the select tool moves things; every other tool draws or puts its mark on top
-  if(BD.tool === "select" && i >= 0){ push(); BD.sel = i; BD.drag = {move:i, from:p, o:clone(o), moved:false, ts}; cap(); paint(); return false; }
+  if(BD.tool === "select" && i >= 0){ push(); BD.sel = i; if(o.t === "tok") BD.color = o.n-1; BD.drag = {move:i, from:p, o:clone(o), moved:false, ts}; cap(); paint(); return false; }
   if(BD.tool === "select") return true;   // empty place: pan
   if(BD.tool === "text"){ textAt(p); return false; }
   const c = COLORS[BD.color];
@@ -1185,25 +1207,91 @@ function goStep(k){ if(k < 0 || k >= BD.steps.length) return; if(BD.play) stopPl
 function addStep(){ push(); BD.steps.splice(BD.cur+1, 0, {o:objs().filter(o => KEEP.includes(o.t)).map(clone), note:""}); BD.cur++; BD.sel = -1; saveBoard(); boardUI(); }
 function delStep(){ if(BD.steps.length < 2) return; push(); BD.steps.splice(BD.cur, 1); BD.cur = Math.min(BD.cur, BD.steps.length-1); BD.sel = -1; saveBoard(); boardUI(); }
 const keyOf = o => o.t === "tok" ? "t" + o.n : o.id ? o.t + o.id : null;
-function tween(a, b, k){
-  const from = new Map(a.filter(keyOf).map(o => [keyOf(o), o])), out = [];
-  a.forEach(o => { if(!KEEP.includes(o.t)) out.push(`<g opacity="${r1(1-k)}">${obj(o, -1)}</g>`); });
-  b.forEach(o => { const f = from.get(keyOf(o)); if(!f || !KEEP.includes(o.t)) return;
-    let da = ((o.a ?? f.a ?? 0) - (f.a ?? o.a ?? 0) + 540) % 360 - 180;
-    out.push(obj({...o, x:f.x + (o.x-f.x)*k, y:f.y + (o.y-f.y)*k, a: o.a === undefined && f.a === undefined ? undefined : (f.a ?? o.a) + da*k}, -1)); });
-  return out.join("");
+/* A tactic as a round, after StratPad (cs2analysis.com/stratpad, tried 2026-11-09): between two steps every player walks
+   the nav mesh at rifle speed (215 u/s, geo.js); a step's clock is the owner's, or the step before minus the longest
+   walk; the grenades of a step are thrown at its clock, fly their nades.ai air time and last their real time: smoke 18 s
+   (bo3.gg 2026-02-23, swap.gg 2026-07-15), fire 7 s (inferno_flame_lifetime 7 in the 1.41.9.6 convar dump). */
+const LIFE = {smoke:18, molotov:7, flash:.6, he:.6};
+const secOf = t => { const m = String(t || "").match(/^(\d+):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+const clockStr = s => mmss(Math.max(0, Math.round(s)));
+const secStr = s => s.toFixed(1).replace(".", ",") + " с";
+const airOf = o => { const it = o.ref && D.items.find(it => it.k === o.ref), v = it && parseFloat(it.air); return v > 0 ? v : 1.5; };
+// the walk from a to b: the nav mesh path once the walls have answered, a straight line and its time until then
+function walk(a, b, slot){
+  const d = Math.hypot(b[0]-a[0], b[1]-a[1]);
+  const r = d > 1 ? geoAsk(`w${a}>${b}`, () => GEO.g.path(a, b), slot || `w${a}>${b}`) : null;
+  if(r && r.found) return {pts:r.points.map(q => [r1(q[0]), r1(q[1])]), sec:r.sec.rifle};
+  return {pts:[a, b], sec:d*(D.scale || 5)/215};
+}
+// the walks into step k: every player or enemy who stands elsewhere than in the step before
+function moves(k){
+  if(k <= 0 || k >= BD.steps.length) return [];
+  const prev = new Map(BD.steps[k-1].o.filter(keyOf).map(o => [keyOf(o), o]));
+  return BD.steps[k].o.filter(turnable).map(o => { const f = prev.get(keyOf(o)); if(!f || f.x === o.x && f.y === o.y) return null; return {o, f, ...walk([f.x, f.y], [o.x, o.y], "w" + keyOf(o))}; }).filter(Boolean);
+}
+function clock(k){
+  const own = secOf(BD.steps[k].time); if(own !== null) return own;
+  if(k === 0) return 115;
+  return clock(k-1) - Math.max(1, ...moves(k).map(m => m.sec));
+}
+// smokes and fires thrown in earlier steps that still burn at step k's clock
+function carried(k){
+  const out = [], T = clock(k);
+  for(let j = 0; j < k; j++){ const at = clock(j);
+    BD.steps[j].o.forEach(o => { if(o.t !== "ln" && o.t !== "nade") return; const b = at - (o.t === "ln" ? airOf(o) : 0); if(T <= b && T > b - LIFE[o.k]) out.push(o); }); }
+  return out;
+}
+// the walks of this step as dashed lines in the player's colour, with the time; red with the shortfall when he can't make it
+function walkLayer(){
+  const k = BD.cur; if(k === 0) return "";
+  const w = LW(), avail = clock(k-1) - clock(k);
+  return moves(k).map(m => { const c = m.o.t === "tok" ? m.o.c : "#ff5148", d = smooth(m.pts), q = along(m.pts, .5), mid = [q.x, q.y], late = m.sec - avail > .05;
+    return `<g pointer-events="none"><path d="${d}" fill="none" stroke="#000a" stroke-width="${w*1.2}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${w*.55}" stroke-dasharray="${w*1.4} ${w}" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<text x="${mid[0]}" y="${mid[1]}" dy=".35em" text-anchor="middle" font-size="${r1(w*3)}" font-weight="700" font-family="Golos Text,system-ui,sans-serif" fill="${late ? "#ff5148" : "#e7ecef"}" stroke="#0b0e10" stroke-width="${r1(w)}" paint-order="stroke">${late ? "+" + secStr(m.sec - avail) : secStr(m.sec)}</text></g>`; }).join("");
+}
+// a point at share f of a polyline, and the way it heads there
+function along(pts, f){
+  const seg = []; let L = 0; for(let i = 1; i < pts.length; i++){ const l = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]); seg.push(l); L += l; }
+  let left = Math.max(0, Math.min(1, f))*L;
+  for(let i = 1; i < pts.length; i++){ const l = seg[i-1], [ax, ay] = pts[i-1], [bx, by] = pts[i];
+    if(left <= l || i === pts.length-1){ const k = l ? Math.min(1, left/l) : 1; return {x:r1(ax + (bx-ax)*k), y:r1(ay + (by-ay)*k), a:Math.round(Math.atan2(by-ay, bx-ax)*180/Math.PI)}; }
+    left -= l; }
+  return {x:pts[0][0], y:pts[0][1], a:0};
+}
+const turnTo = (a, b, k) => a === undefined || a === null ? b : b === undefined || b === null ? a : a + ((b - a + 540) % 360 - 180)*k;
+// the round at clock T: players on their walks from step k, grenades in the air, smokes and fires for their life
+function roundAt(T, k, C, M, G){
+  const out = [], st = BD.steps[k].o, last = k === BD.steps.length-1, tau = C[k] - T, w = LW();
+  const mv = new Map((last ? [] : M[k+1]).map(m => [keyOf(m.o), m])), nx = last ? new Map() : new Map(BD.steps[k+1].o.filter(keyOf).map(o => [keyOf(o), o]));
+  st.forEach(o => { if(!KEEP.includes(o.t) && o.t !== "ln" && o.t !== "nade" && o.t !== "run" && o.t !== "eye") out.push(obj(o, -1)); });
+  G.forEach(g => { if(T > g.at) return; const o = g.o, since = g.at - T;
+    if(since < g.air){ const pts = [[o.tx, o.ty], ...(o.b || []), [o.lx, o.ly]], q = along(pts, since/g.air);
+      out.push(`<path d="${bow(pts)}" fill="none" stroke="${NC[o.k]}" stroke-opacity=".35" stroke-width="${w*.6}" stroke-dasharray="${w*.2} ${w*1.6}" stroke-linecap="round"/>${nglyph(o.k, q.x, q.y, w*4)}`); return; }
+    const after = since - g.air, life = LIFE[o.k]; if(after > life) return;
+    const [x, y] = o.t === "ln" ? [o.lx, o.ly] : [o.x, o.y];
+    out.push(`<g opacity="${r1(Math.min(1, (life - after)/Math.min(1.5, life)))}">${blast(o.k, x, y, o.id)}</g>`); });
+  const people = [];
+  st.forEach(o => { if(!KEEP.includes(o.t)) return; const m = mv.get(keyOf(o)), n = nx.get(keyOf(o)), p = {...o};
+    if(m){ const q = along(m.pts, m.sec ? tau/m.sec : 1); p.x = q.x; p.y = q.y; p.a = tau < m.sec ? q.a : turnTo(q.a, m.o.a, Math.min(1, (tau - m.sec)/.4)); }
+    else if(n && turnable(o)) p.a = turnTo(o.a, n.a, Math.min(1, tau/.4));
+    (turnable(o) ? people : out).push(obj(p, -1)); });
+  return out.join("") + people.join("");
 }
 function play(){
   if(BD.play){ stopPlay(); return; }
   if(BD.steps.length < 2) return;
-  BD.sel = -1; BD.cur = 0; BD.play = {raf:0}; boardUI();
-  const HOLD = 1500, MOVE = 1100; let t0 = performance.now();
+  const n = BD.steps.length, C = BD.steps.map((s, k) => clock(k)), M = BD.steps.map((s, k) => moves(k)), G = [];
+  BD.steps.forEach((s, k) => s.o.forEach(o => { if(o.t === "ln") G.push({o, at:C[k], air:airOf(o)}); else if(o.t === "nade") G.push({o, at:C[k], air:0}); }));
+  const end = Math.min(C[n-1] - 1.5, ...G.filter(g => g.at === C[n-1]).map(g => g.at - g.air - 1.5)), SPEED = 2, T0 = C[0];
+  BD.sel = -1; BD.info = null; BD.cur = 0; BD.play = {raf:0}; boardUI();
+  const t0 = performance.now();
   const tick = now => {
     if(!BD.play) return;
-    const t = now - t0, last = BD.cur === BD.steps.length-1;
-    if(t >= HOLD && !last && t < HOLD + MOVE){ const k = (t-HOLD)/MOVE, e = k < .5 ? 2*k*k : 1 - (-2*k+2)**2/2; paintList(tween(objs(), BD.steps[BD.cur+1].o, e)); }
-    else if(t >= HOLD + MOVE && !last){ BD.cur++; t0 = now; boardUI(); }
-    else if(t >= HOLD && last){ stopPlay(); return; }
+    const T = T0 - (now - t0)/1000*SPEED; let k = 0; while(k < n-1 && T <= C[k+1]) k++;
+    if(k !== BD.cur){ BD.cur = k; boardBars(); }
+    const tm = document.querySelector("#bsteps .tm"); if(tm) tm.textContent = clockStr(T);
+    paintList(roundAt(T, k, C, M, G));
+    if(T <= end){ stopPlay(); return; }
     BD.play.raf = requestAnimationFrame(tick);
   };
   BD.play.raf = requestAnimationFrame(tick);
@@ -1225,6 +1313,13 @@ const b64u = u8 => { let s = ""; for(let i = 0; i < u8.length; i += 8192) s += S
 async function pack(o){ return b64u(new Uint8Array(await new Response(new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer())); }
 async function unpack(code){ const u8 = Uint8Array.from(atob(code.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)); return JSON.parse(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text()); }
 async function shareLink(){
+  // a draft lives only in this browser: «Ссылка» turns it into a shared board first, so whoever opens the link draws on it too
+  if(!BD.doc && !BD.shared && L.fb && FB.db){
+    const name = "Доска " + new Date().toLocaleString("ru", {day:"numeric", month:"numeric", hour:"2-digit", minute:"2-digit"});
+    const ref = await FB.db.collection("boards").add({map:S.map, name, data:JSON.stringify(BD.steps), t:Date.now(), by:BD.by}).catch(() => null);
+    if(!ref){ toast("Не создалась"); return; }
+    openBoard(ref.id);
+  }
   const url = location.origin + location.pathname + (BD.doc ? `#${S.map}-board@${BD.doc}` : `#${S.map}-board~` + await pack({steps:BD.steps}));
   try { await navigator.clipboard.writeText(url); BD.msg = "Ссылка скопирована"; }
   catch(e){ history.replaceState(null, "", url); BD.msg = "Ссылка в адресной строке"; }
@@ -1247,7 +1342,7 @@ function listBoards(){
   if(listMap === S.map) return; listMap = S.map; if(unList){ unList(); unList = null; } BD.list = [];
   FB.ready.then(() => { const m = S.map; if(listMap !== m) return; boardBars();
     unList = FB.db.collection("boards").where("map", "==", m).onSnapshot(q => { if(listMap !== m) return;
-      BD.list = q.docs.map(d => ({id:d.id, name:d.get("name")})).sort((a, b) => a.name.localeCompare(b.name, "ru")); boardBars(); }, () => {}); });
+      BD.list = q.docs.map(d => ({id:d.id, name:d.get("name")})).sort((a, b) => (b.id === TEAM()) - (a.id === TEAM()) || a.name.localeCompare(b.name, "ru")); boardBars(); }, () => {}); });
 }
 function flush(){ saveT = 0; if(!BD.doc) return; FB.db.doc("boards/" + BD.doc).update({data:JSON.stringify(BD.steps), t:Date.now(), by:BD.by}).catch(() => toast("Не сохранилось")); }
 function queueSave(){ clearTimeout(saveT); saveT = setTimeout(flush, 400); }
@@ -1293,9 +1388,9 @@ $("bacts").addEventListener("keydown", e => { if(e.target.id !== "bname") return
    "1:25", "125" or "85" (seconds) all read as 1:25 */
 BD.timing = false;
 function timeChip(){
-  const t = BD.steps[BD.cur].time || "";
-  return BD.timing ? `<input id="btime" class="btime" maxlength="5" placeholder="1:55" value="${esc(t)}">`
-    : `<button type="button" class="seg tm" data-act="time" title="Время раунда">${t || icon("clock")}</button>`;
+  const t = BD.steps[BD.cur].time || "", auto = !t && BD.steps.length > 1 ? clockStr(clock(BD.cur)) : "";   // no own time: the walks give it, shown dimmed
+  return BD.timing ? `<input id="btime" class="btime" maxlength="5" placeholder="${auto || "1:55"}" value="${esc(t)}">`
+    : `<button type="button" class="seg tm" data-act="time" title="Время раунда">${t || (auto ? `<span style="opacity:.55">${auto}</span>` : icon("clock"))}</button>`;
 }
 function timeDone(ok){
   const el = $("btime"), v = (el && el.value || "").trim(); BD.timing = false;
@@ -1326,8 +1421,8 @@ function boardUI(){
   const t = (id, label, inner) => `<button type="button" class="ib" data-tool="${id}" aria-pressed="${on(id)}" title="${label}" aria-label="${label}">${inner}</button>`;
   $("btools").innerHTML = [
     t("select", "Выбрать (S)", icon("mouse-pointer-2")),
-    t("pen", "Рисовать (Q)", icon("pencil")), t("arrow", "Стрелка (W)", icon("move-up-right")),
-    t("rect", "Прямоугольник (X)", icon("square")), t("circ", "Круг (C)", icon("circle")), t("text", "Текст (T)", icon("type")),
+    t("pen", "Рисовать (Q)", icon("pencil")),
+    `<button type="button" class="ib" data-spick aria-pressed="${!!SHAPE[BD.tool]}" title="Фигуры" aria-label="Фигуры">${icon(SHAPE[BD.tool] ? SHAPE[BD.tool][1] : "shapes")}</button>`,
     t("erase", "Стереть (R)", icon("eraser")), "<hr>",
     t("tok", `Игрок ${n} (E)`, `<span class="sw" style="--c:${COLORS[n-1]}">${n}</span>`),
     t("foe", "Противник", `<span class="sw" style="--c:#0b0e10;border-color:#ff5148;box-shadow:inset 0 0 0 5px #0b0e10,inset 0 0 0 9px #ff5148"></span>`),
@@ -1350,7 +1445,7 @@ function setColor(i){
   BD.color = i; BD.sure = false;
   const o = objs()[BD.sel];
   if(o && o.c && o.t !== "tok"){ push(); o.c = COLORS[i]; saveBoard(); }
-  else if(!["pen","arrow","rect","circ","text","tok"].includes(BD.tool)) BD.tool = "pen";
+  else if(!["pen","arrow","rect","circ","text","tok","pick","select"].includes(BD.tool)) BD.tool = "pen";   // with lineups or select, 1–5 pick the player
   boardUI();
 }
 /* grenade tool: every lineup of that kind on this map shows where it lands; landings in one place group with a count.
@@ -1358,6 +1453,7 @@ function setColor(i){
    spots, and a click on one of them puts that lineup. A click anywhere else puts only the effect. */
 BD.pk = {open:-1, hot:-1}; BD.thB = [];
 const GT = ["pick", "throw", "fx", "drop"];   // the grenade tools, each opening the kinds first
+const SHAPE = {arrow:["Стрелка (W)", "move-up-right"], rect:["Прямоугольник (X)", "square"], circ:["Круг (C)", "circle"], text:["Текст (T)", "type"]};
 BD.at = "to";
 function pickClusters(){
   const out = [];
@@ -1399,7 +1495,11 @@ function pickLayer(){
 function putLineup(i){
   const it = D.items[i], list = objs(), at = list.findIndex(o => o.t === "ln" && o.ref === it.k);
   if(at >= 0){ push(); list.splice(at, 1); saveBoard(); paint(); boardBars(); return; }
-  commit({t:"ln", k:it.kind, ref:it.k, id:uid(), tx:it.t[0], ty:it.t[1], lx:it.l[0], ly:it.l[1]});
+  // the chosen player (1–5, or a click on him) throws it: he goes to its throw spot in this step and faces the landing
+  const n = Math.min(BD.color, 4)+1, p = list.find(o => o.t === "tok" && o.n === n && !o.dead), o = {t:"ln", k:it.kind, ref:it.k, id:uid(), tx:it.t[0], ty:it.t[1], lx:it.l[0], ly:it.l[1]};
+  push();
+  if(p){ o.by = n; p.x = it.t[0]; p.y = it.t[1]; p.a = Math.round(Math.atan2(it.l[1]-it.t[1], it.l[0]-it.t[0])*180/Math.PI); }
+  list.push(o); saveBoard(); paint(); boardBars();
 }
 function pickAt(m){
   if(m.pi !== undefined){ putLineup(m.pi); return; }
@@ -1416,12 +1516,13 @@ stage.addEventListener("pointerover", e => {
 $("btools").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return;
   if(GT.includes(b.dataset.tool)){ kindPick(b, b.dataset.tool); return; }
   if(b.dataset.cpick !== undefined){ kindPick(b, "color"); return; }   // the six colours open beside the button, like the kinds
+  if(b.dataset.spick !== undefined){ kindPick(b, "shape"); return; }   // arrow, rectangle, circle and text, the same way
   kindClose(); if(b.dataset.tool) setTool(b.dataset.tool); if(b.dataset.color) setColor(+b.dataset.color); });
 // the grenade kinds, beside the grenade button (above it on phones)
 function kindPick(btn, mode){
   const el = $("kpick"); if(!el.hidden && el.dataset.mode === mode){ kindClose(); return; }
   el.dataset.mode = mode;
-  el.innerHTML = mode === "color" ? COLORS.map((c, i) => `<button type="button" class="ib" data-color="${i}" aria-pressed="${BD.color === i}" title="Цвет (${i+1})"><span class="sw" style="--c:${c}"></span></button>`).join("") : Object.keys(KIND).map(k => `<button type="button" class="ib" data-kind="${k}" aria-pressed="${BD.tool === mode && BD.kind === k}" title="${KIND[k]}" aria-label="${KIND[k]}">${mode === "drop" ? `<img src="${gimg(k)}" alt="">` : kicon(k)}</button>`).join("");
+  el.innerHTML = mode === "shape" ? Object.entries(SHAPE).map(([v, [l, ic]]) => `<button type="button" class="ib" data-shape="${v}" aria-pressed="${BD.tool === v}" title="${l}" aria-label="${l}">${icon(ic)}</button>`).join("") : mode === "color" ? COLORS.map((c, i) => `<button type="button" class="ib" data-color="${i}" aria-pressed="${BD.color === i}" title="Цвет (${i+1})"><span class="sw" style="--c:${c}"></span></button>`).join("") : Object.keys(KIND).map(k => `<button type="button" class="ib" data-kind="${k}" aria-pressed="${BD.tool === mode && BD.kind === k}" title="${KIND[k]}" aria-label="${KIND[k]}">${mode === "drop" ? `<img src="${gimg(k)}" alt="">` : kicon(k)}</button>`).join("");
   el.hidden = false; draw();
   const r = btn.getBoundingClientRect(), s = stage.getBoundingClientRect();
   if(innerWidth <= 760){ el.style.left = `${Math.max(8, Math.min(r.left - s.left - 40, s.width - el.offsetWidth - 8))}px`; el.style.top = `${$("btools").getBoundingClientRect().top - s.top - el.offsetHeight - 6}px`; }
@@ -1429,6 +1530,7 @@ function kindPick(btn, mode){
 }
 function kindClose(){ $("kpick").hidden = true; }
 $("kpick").addEventListener("click", e => { const c = e.target.closest("[data-color]"); if(c){ kindClose(); setColor(+c.dataset.color); return; }
+  const sh = e.target.closest("[data-shape]"); if(sh){ kindClose(); setTool(sh.dataset.shape); return; }
   const b = e.target.closest("[data-kind]"); if(!b) return; const mode = $("kpick").dataset.mode; kindClose(); setTool(mode + ":" + b.dataset.kind); });
 // a throw by hand while it is being marked: the spot, then the flight to the pointer
 function throwGhost(){
