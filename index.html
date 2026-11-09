@@ -135,8 +135,35 @@ img,svg image{-webkit-user-drag:none}
 .pin p{margin:0;max-width:75ch}
 .pin a{color:var(--fg);text-underline-offset:3px}
 .mhead{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.mlist{flex-wrap:wrap;background:var(--panel)}
+.mhead{flex-wrap:nowrap;min-width:0}
+.mlist{flex:0 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;background:var(--panel)}.mlist::-webkit-scrollbar{display:none}
 .mnote{color:var(--mute)}
+.mhead .ib{color:var(--mute)}
+/* the veto: one card per map, our chance on it, the bar of our rate against theirs */
+.veto{display:grid;gap:14px;min-width:0}
+.vhead{display:flex;align-items:center;gap:14px}
+.vhead .sp{flex:1}
+.vhead .ib{color:var(--mute)}.vhead .ib:disabled{opacity:.3;cursor:default}
+.vturn{font:600 13px var(--display);letter-spacing:.12em;color:var(--mute)}
+.vturn.us{color:#5dd27a}.vturn.them{color:#ef6b5b}
+.vbig{font:600 44px/1 var(--display)}.vbig small,.vnum small{font-size:.5em;color:var(--mute);margin-left:1px}
+.vmaps{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.vm{position:relative;aspect-ratio:3/4;border-radius:14px;overflow:hidden;text-align:left;padding:12px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;
+  background:linear-gradient(180deg,#0e121633 0%,#0e1216cc 62%,#0e1216 100%),var(--img) center/cover,var(--raise);
+  box-shadow:inset 0 0 0 1px #ffffff14;transition:filter .15s,opacity .15s,box-shadow .15s}
+.vm:hover{box-shadow:inset 0 0 0 1px #ffffff40}
+.vnum{font:600 34px/1 var(--display)}
+.vname{font:600 13px var(--display);letter-spacing:.1em;text-transform:uppercase;color:#e7ecefcc}
+.vtug{display:block;height:3px;margin-top:8px;border-radius:2px;background:#ef6b5b;overflow:hidden}
+.vtug i{display:block;height:100%;background:#5dd27a}
+.vtag{position:absolute;left:10px;top:10px;font:600 11px var(--display);letter-spacing:.1em;padding:3px 8px;border-radius:6px;background:#0e1216cc}
+.vtag.us{color:#5dd27a}.vtag.them{color:#ef6b5b}.vtag.ban{background:var(--accent);color:#0e1216}.vtag.go{background:var(--fg);color:#0e1216}
+.vm.ban{box-shadow:inset 0 0 0 2px var(--accent)}
+.vm.their{box-shadow:inset 0 0 0 2px #ef6b5b}
+.vm.gone{filter:grayscale(1);opacity:.35;cursor:default}
+.vm.gone .vnum,.vm.gone .vtug{visibility:hidden}
+.vm.final{box-shadow:inset 0 0 0 2px var(--fg)}
+@media (max-width:760px){.vmaps{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.vm{padding:9px;border-radius:11px}.vnum{font-size:26px}.vname{font-size:11px}.vbig{font-size:36px}}
 .mtop{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .mmap{font:600 30px var(--display);letter-spacing:.04em}
 .mscore{font:600 24px var(--display)}.mscore.win{color:#5dd27a}.mscore.loss{color:#ef6b5b}
@@ -696,12 +723,14 @@ const VIEWS = {map:"Карта гранат", board:"Доска", cfg:"Конф�
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const store = (f, d) => { try { return f(localStorage); } catch(e){ return d; } };
 const LM = () => L.maps[S.map];
-function hashOf(){ return V.view === "map" ? `#${S.map}` : V.view === "cfg" ? "#cfg" : V.view === "match" ? "#match" : `#${S.map}-${V.view}${V.view === "nades" ? `-${V.side}-${V.cat+1}` : ""}${V.view === "board" ? (BD.doc ? "@" + BD.doc : BD.shared ? "~" + BD.shared : "") : ""}`; }
+function hashOf(){ return V.view === "map" ? `#${S.map}` : V.view === "cfg" ? "#cfg" : V.view === "match" ? (MT.pin ? `#match-${MT.pin}` : "#match") : `#${S.map}-${V.view}${V.view === "nades" ? `-${V.side}-${V.cat+1}` : ""}${V.view === "board" ? (BD.doc ? "@" + BD.doc : BD.shared ? "~" + BD.shared : "") : ""}`; }
 function route(){
   // #mirage (map), #mirage-board, #cfg, #mirage-nades-ct-2, #mirage-names; the old main-site form #mirage-nades-t-2 and #dust2-cfg-t too
   // #mirage-board~<code>: a board sent by link (shareLink below)
   const m = location.hash.match(/^#([a-z0-9]+)(?:-(map|board|cfg|nades|names))?(?:-(t|ct))?(?:-(\d+))?(?:~([A-Za-z0-9_-]+))?(?:@([A-Za-z0-9-]+))?$/);
   let k = S.map || DATA.order[0], v = "map";
+  const pin = location.hash.match(/^#match-(1-[0-9a-f-]{36})$/);   // one match by its FACEIT ID
+  if(pin){ v = "match"; MT.pin = pin[1]; }
   if(m){ if(m[1] === "cfg" || m[1] === "match") v = m[1]; else if(DATA.maps[m[1]]){ k = m[1]; v = m[2] || "map"; } if(m[3]) V.side = m[3]; V.cat = m[4] ? +m[4]-1 : 0; }
   if(v === "names"){ v = "map"; S.names = true; }   // the old names section: the map with its names layer
   V.code = m && m[5] && v === "board" ? m[5] : "";
@@ -743,7 +772,7 @@ function header(){
 /* ---------- «Матч»: one FACEIT match from the Worker cs2-match (dev/active/cs2/worker), opponents before the game ----------
    Roles by Faceit Scope's thresholds (vault/raw/cs2-faceit-2026-11-09/match-info.md rows 15-18); the pick and ban marks
    only on maps with 3 or more games on each side (FACEIT Extender's rule, row 7). */
-const MT = {api:"https://cs2-match.cs2-team-hub.workers.dev", list:null, last:null, cur:null, data:{}, timer:0, err:""};
+const MT = {api:"https://cs2-match.cs2-team-hub.workers.dev", list:null, last:null, cur:null, data:{}, timer:0, err:"", cap:{}, bans:{}, real:{}, rand:{}};
 const MSTAT = {CHECK_IN:"Принятие", VOTING:"Выбор карт", CONFIGURING:"Сервер", READY:"Готов", ONGOING:"Идёт", FINISHED:"Завершён", CANCELLED:"Отменён", ABORTED:"Прерван"};
 const mapName = id => { const k = String(id || "").replace(/^de_/, ""); return DATA.maps[k]?.name || k.charAt(0).toUpperCase() + k.slice(1); };
 const mget = p => fetch(MT.api + p).then(r => r.ok ? r.json() : Promise.reject(r.status));
@@ -754,14 +783,17 @@ async function matchLoad(id){
   for(let i = 0; i < 3 && MT.cur === id; i++){   // one retry after a short pause: a first build of a match failed once in testing
     try { MT.data[id] = await mget(`/match/${id}`); MT.err = ""; break; } catch(e){ MT.err = "Нет ответа от сервера матчей"; await new Promise(ok => setTimeout(ok, 2000)); }
   }
-  if(V.view === "match" && MT.cur === id) paintPage();
+  const a = MT.data[id], again = () => { if(V.view === "match" && MT.cur === id) paintPage(); };
+  if(a?.them?.leader && !MT.cap[a.them.leader]) mget(`/captain/${a.them.leader}`).then(c => { MT.cap[a.them.leader] = c; again(); }, () => {});
+  if(a && !["CHECK_IN", "VOTING"].includes(a.status) && !MT.real[id]) mget(`/veto/${id}`).then(v => { MT.real[id] = v.map(x => x.map); MT.rand[id] = v.filter(x => x.random).map(x => x.map); MT.bans[id] ||= [...MT.real[id]]; again(); }, () => {});
+  again();
 }
 async function matchOpen(){
   clearInterval(MT.timer);
   MT.timer = setInterval(matchPoll, 5000);
   if(!MT.list){ try { MT.list = await mget("/recent"); } catch(e){ MT.list = []; MT.err = "Нет ответа от сервера матчей"; } }
   await matchPoll(true);
-  if(!MT.cur) matchLoad(MT.list[0]?.id); else if(V.view === "match") paintPage();
+  if(MT.pin && MT.cur !== MT.pin && !MT.data[MT.pin]) matchLoad(MT.pin); else if(!MT.cur) matchLoad(MT.list[0]?.id); else if(V.view === "match") paintPage();
 }
 async function matchPoll(first){
   if(V.view !== "match"){ clearInterval(MT.timer); return; }
@@ -769,18 +801,9 @@ async function matchPoll(first){
   if(!last || MT.last && last.at === MT.last.at) return;
   const fresh = MT.last && last.id !== MT.last.id; MT.last = last;
   if(MT.list && !MT.list.some(x => x.id === last.id)) MT.list.unshift({id:last.id, at:Date.parse(last.at)/1000, status:"live"});
-  if(fresh || first && Date.now() - Date.parse(last.at) < 3*3600e3 || MT.cur === last.id) matchLoad(last.id);
+  if(fresh || first && !MT.pin && Date.now() - Date.parse(last.at) < 3*3600e3 || MT.cur === last.id) matchLoad(last.id);
 }
 const pct = (v, d=0) => v === null || v === undefined ? "—" : (v*100).toFixed(d) + "%";
-// a side per map: lifetime over its five (games, win rate) and the last 30 matches of each (games, wins)
-function sideMaps(t){
-  const out = {}, o = m => out[m] ||= {g:0, w:0, rg:0, rw:0};
-  for(const p of t.players){
-    for(const [m, s] of Object.entries(p.maps || {})){ const x = o(m); x.g += s.g || 0; x.w += (s.g || 0) * (s.w || 0) / 100; }
-    for(const r of p.recentGames || []){ const x = o(r.map); x.rg++; x.rw += r.r; }
-  }
-  return out;
-}
 // players who played the same recent matches on one team: a party (two or more shared matches)
 function stacks(t){
   const ps = t.players, seen = {};
@@ -792,94 +815,84 @@ function stacks(t){
   ps.forEach((p, i) => (groups[find(i)] ||= []).push(i));
   return Object.values(groups).filter(g => g.length > 1).map(g => {
     const games = Object.values(seen).filter(s => s.who.filter(i => g.includes(i)).length >= 2).map(s => s.r);
-    const maps = {};
-    for(const r of games){ const x = maps[r.map] ||= [0, 0]; x[0] += r.r; x[1]++; }
-    return {who:g.map(i => ps[i].nick), games:games.length, wins:games.reduce((a, r) => a + r.r, 0), maps};
+    return {who:g.map(i => ps[i].nick), games:games.length, wins:games.reduce((a, r) => a + r.r, 0)};
   }).sort((a, b) => b.who.length - a.who.length);
 }
-// a side's rate on a map: the last 30 matches when there are 5 or more games there, else lifetime with 3 or more
-const sideRate = x => !x ? null : x.rg >= 5 ? x.rw / x.rg : x.g >= 3 ? x.w / x.g : null;
-const rateTxt = x => !x ? "—" : x.rg >= 5 ? `${pct(x.rw/x.rg)} <span title="Побед из последних 30 матчей каждого">${x.rw}/${x.rg}</span>` : x.g >= 3 ? `${pct(x.w/x.g)} <span title="За всё время, матчей у пятёрки">${x.g}</span>` : `<span>${x.g || 0}</span>`;
+/* ---------- the map veto: our chance on each map and the best drop, replayed as bans are marked ----------
+   A side's rate on a map: the five's last 30 matches pulled toward their lifetime rate (weight 5), the lifetime rate
+   toward 50 % (weight 10). Our chance on a map: FACEIT's match chance moved by half the gap between the two rates.
+   Their next drop: their captain's habit, Mappio's (drops+2)/(chances+4) (dankotov/faceit-mappio, probabilities.ts),
+   times exp(4 × (our chance − 0.5)). faction1 drops first. The weights are Claude's choice; faceit-plus
+   (simnJS/faceit-plus) plays the veto out the same way, with a fitted model. */
+const lgt = p => Math.log(p/(1-p)), sgm = x => 1/(1+Math.exp(-x));
+function vetoModel(a){
+  const pool = a.pool, cap = MT.cap[a.them.leader];
+  const rate = (side, m) => {
+    let g = 0, w = 0, rg = 0, rw = 0;
+    for(const p of side.players){ const s = p.maps?.[m]; if(s){ g += s.g || 0; w += (s.g || 0) * (s.w || 0) / 100; } for(const r of p.recentGames || []) if(r.map === m){ rg++; rw += r.r; } }
+    const life = (w + 5) / (g + 10);
+    return {r:(rw + 5*life) / (rg + 5), rg, rw, g};
+  };
+  const US = {}, TH = {}, P = {}, C = {};
+  for(const m of pool){ US[m] = rate(a.us, m); TH[m] = rate(a.them, m); P[m] = sgm(lgt(a.us.win ?? .5) + .5*(lgt(US[m].r) - lgt(TH[m].r))); C[m] = {d:0, n:0}; }
+  for(const t of cap?.turns || []){ for(const g of t.pool) if(C[g]) C[g].n++; if(C[t.drop]) C[t.drop].d++; }
+  const habit = m => (C[m].d + 2) / (C[m].n + 4);
+  const theirs = left => { const x = left.map(m => habit(m) * Math.exp(4 * (P[m] - .5))), s = x.reduce((u, v) => u + v, 0); return Object.fromEntries(left.map((m, i) => [m, x[i] / s])); };
+  const first = (a.us.faction || "faction2") === "faction1", ours = n => (n % 2 === 0) === first, memo = new Map();
+  const value = (left, n) => {
+    if(left.length === 1) return P[left[0]];
+    const k = left.join() + n; if(memo.has(k)) return memo.get(k);
+    let v;
+    if(ours(n)) v = Math.max(...left.map(m => value(left.filter(x => x !== m), n+1)));
+    else { const q = theirs(left); v = left.reduce((s, m) => s + q[m] * value(left.filter(x => x !== m), n+1), 0); }
+    memo.set(k, v); return v;
+  };
+  return {pool, US, TH, P, C, theirs, ours, value, cap};
+}
+function vetoView(a){
+  const VM = vetoModel(a), bans = MT.bans[a.id] || [], left = VM.pool.filter(m => !bans.includes(m)), n = bans.length, mine = VM.ours(n), done = left.length === 1;
+  const after = done ? null : mine ? Object.fromEntries(left.map(m => [m, VM.value(left.filter(x => x !== m), n+1)])) : VM.theirs(left);
+  const top = done ? null : left.reduce((x, m) => after[m] > after[x] ? m : x);
+  const chance = done ? VM.P[left[0]] : VM.value(left, n);
+  const cards = VM.pool.map(m => {
+    const k = m.replace(/^de_/, ""), i = bans.indexOf(m), us = VM.US[m], th = VM.TH[m];
+    const tip = `Мы ${pct(us.r)} (${us.rg} игр недавно) · они ${pct(th.r)} (${th.rg})` + (VM.cap ? ` · их капитан банил ${VM.C[m].d} из ${VM.C[m].n}` : "");
+    const tag = i >= 0 ? `<span class="vtag ${VM.ours(i) ? "us" : "them"}" ${MT.rand[a.id]?.includes(m) && MT.real[a.id]?.indexOf(m) === i ? `title="Капитан не успел, FACEIT убрал карту сам"` : ""}>${i+1} · ${MT.rand[a.id]?.includes(m) && MT.real[a.id]?.indexOf(m) === i ? "АВТО" : VM.ours(i) ? "МЫ" : "ОНИ"}</span>`
+      : done ? `<span class="vtag go">ИГРАЕМ</span>`
+      : m === top ? (mine ? `<span class="vtag ban">БАН</span>` : `<span class="vtag them">ИХ ${pct(after[m])}</span>`) : "";
+    return `<button class="vm${i >= 0 ? " gone" : ""}${m === top ? (mine ? " ban" : " their") : ""}${done && i < 0 ? " final" : ""}" data-vban="${m}" title="${tip}" style="--img:url(maps/${k}.webp)">
+      ${tag}<span class="vnum">${Math.round(VM.P[m]*100)}<small>%</small></span><span class="vname">${esc(mapName(m))}</span>
+      <span class="vtug"><i style="width:${(us.r / (us.r + th.r) * 100).toFixed(1)}%"></i></span></button>`;
+  }).join("");
+  return `<section class="veto"><div class="vhead">
+      <span class="vturn ${done ? "" : mine ? "us" : "them"}">${done ? "ИГРАЕМ" : mine ? "НАШ БАН" : "ИХ БАН"}</span>
+      <span class="vbig" title="Наш шанс на победу в конце бана">${Math.round(chance*100)}<small>%</small></span>
+      <span class="sp"></span>
+      <button class="ib" data-vundo ${n ? "" : "disabled"} title="Шаг назад">${icon("undo-2")}</button>
+      <button class="ib" data-vreset title="Как было">${icon("rotate-ccw")}</button>
+    </div><div class="vmaps">${cards}</div></section>`;
+}
 function matchView(){
   const id = MT.cur, a = MT.data[id];
   const when = t => { const d = new Date(t*1000); return d.toLocaleDateString("ru", {day:"2-digit", month:"2-digit"}) + " " + d.toLocaleTimeString("ru", {hour:"2-digit", minute:"2-digit"}); };
-  const chips = (MT.list || []).map(x => `<button class="seg" data-mid="${x.id}" aria-pressed="${x.id === id}">${x.id === MT.last?.id && MT.data[x.id]?.status !== "FINISHED" ? "Сейчас" : (MT.data[x.id]?.map ? mapName(MT.data[x.id].map) + " · " : "") + when(x.at)}</button>`).join("");
-  let h = `<div class="mhead"><div class="grp mlist">${chips || `<span class="seg">Матчей нет</span>`}</div>${a?.url ? `<a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener">${icon("external-link")}Комната</a>` : ""}</div>`;
+  const chips = (MT.list || []).map(x => `<button class="seg" data-mid="${x.id}" aria-pressed="${x.id === id}">${x.id === MT.last?.id && MT.data[x.id]?.status !== "FINISHED" ? "Сейчас" : when(x.at)}</button>`).join("");
+  let h = `<div class="mhead"><div class="grp mlist">${chips || `<span class="seg">Матчей нет</span>`}</div>${a?.url ? `<a class="ib" href="${esc(a.url)}" target="_blank" rel="noopener" title="Комната FACEIT">${icon("external-link")}</a>` : ""}</div>`;
   if(MT.err && !a) return h + `<p class="mnote">${MT.err}</p>`;
-  if(!a) return h + `<p class="mnote">Загрузка…</p>`;
-  if(!a.them || !a.them.players.length) return h + `<p class="mnote">${MSTAT[a.status] || a.status}: составов ещё нет</p>`;
-  if(!a.them.players[0].recentGames) return h + `<p class="mnote">Загрузка…</p>`;
-  const T = sideMaps(a.them), U = sideMaps(a.us), ST = stacks(a.them), SU = stacks(a.us);
-  const pool = a.pool.length ? a.pool : Object.keys(T);
-  const rows = pool.map(m => { const t = sideRate(T[m]), u = sideRate(U[m]); return {m, t:T[m], u:U[m], gap: t !== null && u !== null ? u - t : null, cold: !(T[m]?.rg)}; });
-  const ok = rows.filter(r => r.gap !== null);
-  const best = ok.length ? ok.reduce((x, y) => y.gap > x.gap ? y : x) : null, worst = ok.length ? ok.reduce((x, y) => y.gap < x.gap ? y : x) : null;
-  const k = String(a.map || "").replace(/^de_/, "");
-  const focus = MT.focus && pool.includes(MT.focus) ? MT.focus : a.map || best?.m || pool[0];
-  // verdict
-  const why = r => { const t = sideRate(r.t), u = sideRate(r.u); return `мы ${pct(u)}, они ${pct(t)}`; };
-  const big = ST[0];
-  h += `<div class="mtop"><div class="mmap">${a.map ? esc(mapName(a.map)) : MSTAT[a.status] || a.status}</div>
-    ${a.score ? `<div class="mscore ${a.score[0] > a.score[1] ? "win" : "loss"}">${a.score[0]} : ${a.score[1]}</div>` : `<div class="chip">${MSTAT[a.status] || a.status}</div>`}
-    ${a.us?.win != null ? `<div class="chip" title="Шанс победы по FACEIT">${pct(a.us.win)} : ${pct(a.them.win)}</div>` : ""}
-    ${a.map && DATA.maps[k] ? `<button class="btn" data-gomap="${k}">${icon("map")}Раскидка</button>` : ""}</div>
-    <div class="verdict">
-      ${best && best.gap > 0 ? `<div class="vrow"><span class="tag pick">БЕРЁМ</span><b>${esc(mapName(best.m))}</b><span>${why(best)}</span></div>` : ""}
-      ${worst && worst.gap < 0 ? `<div class="vrow"><span class="tag ban">БАНИМ</span><b>${esc(mapName(worst.m))}</b><span>${why(worst)}</span></div>` : ""}
-      ${rows.filter(r => r.cold).length ? `<div class="vrow"><span class="tag cold">НЕ ИГРАЮТ</span><b>${rows.filter(r => r.cold).map(r => esc(mapName(r.m))).join(", ")}</b><span>скорее всего, забанят сами</span></div>` : ""}
-      ${big ? `<div class="vrow"><span class="tag">${icon("users")}ПАЧКА</span><b>${big.who.map(esc).join(" + ")}</b><span>${big.games} матчей вместе, побед ${pct(big.wins/big.games)}</span></div>` : `<div class="vrow"><span class="tag">${icon("user")}</span><span>Играют поодиночке: общих матчей нет</span></div>`}
-    </div>`;
-  // maps
-  const stackCell = m => { const s = big?.maps[m]; return s ? `${s[0]}/${s[1]}` : "—"; };
-  h += `<div class="mscroll"><table class="mmaps"><thead><tr><th>Карта</th><th>Они</th>${big ? `<th title="Их пачка в общих матчах: побед из игр">Пачка</th>` : ""}<th>Мы</th><th title="Наш процент побед минус их">±</th><th></th></tr></thead><tbody>${rows.map(r =>
-    `<tr class="${r.m === a.map ? "picked" : ""}${r.m === focus ? " focus" : ""}" data-mmap="${r.m}"><td>${esc(mapName(r.m))}</td><td>${rateTxt(r.t)}</td>${big ? `<td>${stackCell(r.m)}</td>` : ""}<td>${rateTxt(r.u)}</td><td class="${r.gap > 0 ? "up" : r.gap < 0 ? "dn" : ""}">${r.gap === null ? "—" : (r.gap > 0 ? "+" : "") + Math.round(r.gap*100)}</td><td>${r === best && best.gap > 0 ? `<span class="tag pick">ПИК</span>` : r === worst && worst.gap < 0 ? `<span class="tag ban">БАН</span>` : r.cold ? `<span class="tag cold" title="Никто из них не играл её в последних 30 матчах">НЕ ИГРАЮТ</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
-  // who is dangerous on the focused map
-  const onMap = (t, enemy) => {
-    const ps = t.players.map(p => ({p, s: p.maps?.[focus] || null, r: (p.recentGames || []).filter(x => x.map === focus)}));
-    const has = ps.filter(x => x.s && x.s.g >= 3);
-    const top = f => has.length ? has.reduce((x, y) => f(y) > f(x) ? y : x) : null;
-    const awp = top(x => x.s.awp || 0), ent = top(x => x.s.entry[0] || 0), kd = top(x => x.s.kd || 0);
-    const chips = [awp && awp.s.awp >= .1 ? `<span class="chip">${icon("crosshair")}AWP: <b>${esc(awp.p.nick)}</b> ${pct(awp.s.awp)} убийств</span>` : "",
-      ent ? `<span class="chip">${icon("zap")}Заходит первым: <b>${esc(ent.p.nick)}</b> ${pct(ent.s.entry[0])} раундов</span>` : "",
-      kd ? `<span class="chip">${icon("flame")}Лучший K/D: <b>${esc(kd.p.nick)}</b> ${kd.s.kd}</span>` : ""].join("");
-    const row = x => `<tr><td class="nick">${esc(x.p.nick)}</td><td>${x.s ? x.s.g : 0}</td><td>${x.s && x.s.g ? x.s.w + "%" : "—"}</td><td>${x.r.length ? `${x.r.reduce((a, y) => a + y.r, 0)}/${x.r.length}` : "—"}</td><td>${x.s?.kd ?? "—"}</td><td>${x.s?.adr ? Math.round(x.s.adr) : "—"}</td><td>${x.s ? pct(x.s.awp) : "—"}</td><td>${x.s ? pct(x.s.entry[0]) : "—"}</td><td>${x.s ? pct(x.s.clutch) : "—"}</td></tr>`;
-    return `<section class="mteam ${enemy ? "them" : "us"}"><h2>${enemy ? "Соперники" : "Мы"} на ${esc(mapName(focus))}</h2><div class="mchips">${chips}</div>
-      <table><thead><tr><th>Ник</th><th title="Матчей на карте за всё время">Матчей</th><th>Побед</th><th title="Побед из игр на карте в последних 30 матчах">Недавно</th><th>K/D</th><th>ADR</th><th title="Доля убийств с AWP">AWP</th><th title="Доля раундов, где он первым идёт в дуэль">Заход</th><th title="Побед 1 на 1">1v1</th></tr></thead><tbody>${ps.map(row).join("")}</tbody></table></section>`;
-  };
-  h += onMap(a.them, true) + onMap(a.us, false);
-  // players overall
-  const team = (t, enemy, st) => {
-    const top = t.players.reduce((x, p) => (p.sniper || 0) > (x?.sniper || 0) ? p : x, null);
-    const row = p => {
-      const roles = [
-        p.id === t.leader ? `<span title="Капитан: банит карты">${icon("crown")}</span>` : "",
-        p === top && p.sniper ? `<span title="Больше всех убийств с AWP: ${pct(p.sniper)}">${icon("crosshair")}</span>` : "",
-        p.entry[0] > .25 && p.entry[1] > .55 ? `<span title="Заходит первым: ${pct(p.entry[0])} раундов, успешно ${pct(p.entry[1])}">${icon("zap")}</span>` : "",
-        p.flash[0] > .4 && p.flash[1] > .5 ? `<span title="Флешки: ${p.flash[0]} за раунд, удачных ${pct(p.flash[1])}">${icon("sun")}</span>` : "",
-        p.clutch > .4 ? `<span title="1 на 1 выигрывает ${pct(p.clutch)}">${icon("shield")}</span>` : "",
-        st.some(s => s.who.includes(p.nick)) ? `<span title="В пачке">${icon("users")}</span>` : "",
-        p.bans ? `<span class="warn" title="Баны на FACEIT: ${p.bans}">${icon("ban")}</span>` : "",
-      ].join("");
-      const form = (p.recent || []).map(r => `<i class="fd ${r === "1" ? "w" : "l"}"></i>`).join("");
-      const rw = (p.recentGames || []).reduce((x, y) => x + y.r, 0), rn = (p.recentGames || []).length;
-      return `<tr><td><span class="lvl l${p.level}">${p.level ?? "?"}</span></td><td class="nick"><a href="https://www.faceit.com/ru/players/${encodeURIComponent(p.nick)}" target="_blank" rel="noopener">${esc(p.nick)}</a></td>
-        <td>${p.elo ?? "—"}</td><td class="form" title="Последние 5 матчей">${form}</td><td title="Побед из последних 30 матчей">${rn ? `${rw}/${rn}` : "—"}</td><td title="K/D за последние 30 матчей; за всё время ${p.kd ?? "—"}">${p.lastKd ?? "—"}</td><td>${p.adr ? Math.round(p.adr) : "—"}</td><td>${p.hs ?? "—"}%</td>
-        <td title="Матчей на FACEIT, аккаунт с ${p.since ?? "?"} года">${p.matches ?? "—"}${p.since ? ` · ${p.since}` : ""}</td><td class="roles">${roles}</td></tr>`;
-    };
-    return `<section class="mteam ${enemy ? "them" : "us"}"><h2>${enemy ? "Соперники" : "Мы"}<span class="mavg">${t.rating ? `Elo ${t.rating}` : ""}</span></h2>
-      <table><thead><tr><th>Ур.</th><th>Ник</th><th>Elo</th><th>Форма</th><th>30 игр</th><th>K/D</th><th>ADR</th><th>HS</th><th>Матчей</th><th></th></tr></thead><tbody>${t.players.map(row).join("")}</tbody></table></section>`;
-  };
-  return h + team(a.them, true, ST) + team(a.us, false, SU);
+  if(!a || a.them?.players?.length && !a.them.players[0].recentGames) return h + `<p class="mnote">Загрузка…</p>`;
+  if(!a.them || !a.them.players.length || !a.pool.length) return h + `<p class="mnote">${MSTAT[a.status] || a.status}</p>`;
+  return h + vetoView(a);
 }
 function paintPage(){
   const body = {cfg:cfgView, nades:nadesView, match:matchView}[V.view]();
   page.innerHTML = header() + `<div class="pin">${body}</div>`;
   draw();
 }
-page.addEventListener("click", e => { const r = e.target.closest("[data-mmap]"); if(r){ MT.focus = r.dataset.mmap; paintPage(); } });
 page.addEventListener("click", e => {
   const b = e.target.closest("button"); if(!b) return;
-  if(b.dataset.mid){ matchLoad(b.dataset.mid); return; }
+  if(b.dataset.mid){ MT.pin = null; matchLoad(b.dataset.mid); return; }
+  if(b.dataset.vban){ const l = MT.bans[MT.cur] ||= [], a = MT.data[MT.cur]; if(!l.includes(b.dataset.vban) && a.pool.length - l.length > 1){ l.push(b.dataset.vban); paintPage(); } return; }
+  if(b.hasAttribute("data-vundo")){ MT.bans[MT.cur]?.pop(); paintPage(); return; }
+  if(b.hasAttribute("data-vreset")){ MT.bans[MT.cur] = [...(MT.real[MT.cur] || [])]; paintPage(); return; }
   if(b.dataset.gomap){ show("map", b.dataset.gomap); return; }
   if(b.dataset.pm){ V.cat = 0; show(V.view, b.dataset.pm); return; }
   if(b.dataset.ps){ V.side = b.dataset.ps; V.cat = 0; show("nades", S.map); return; }
