@@ -1379,7 +1379,7 @@ function pickLayer(){
   cl.forEach((g, ci) => {
     const [x, y] = g.l, open = BD.pk.open === ci, n = g.m.length, ring = c, picked = g.m.some(isOn);
     const fade = opened && !open ? ` opacity=".25"` : "";
-    if(!open && BD.pk.hot === ci && !opened) g.m.forEach(i => { const [tx, ty] = other(D.items[i]);   // hover: the other end
+    if(!open && BD.pk.hot === ci && !opened) g.m.forEach(i => { if(isOn(i)) return; const [tx, ty] = other(D.items[i]);   // hover: the other end; a lineup on the board already draws its own flight
       lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.7}" stroke-dasharray="${w*.2} ${w*1.6}" stroke-linecap="round"/><circle cx="${tx}" cy="${ty}" r="${w*1.2}" fill="${c}"/>`; });
     dots += `<g data-pc="${ci}"${fade}><circle cx="${x}" cy="${y}" r="${r*1.7}" fill="transparent"/>` + (picked && n === 1
       ? `<circle cx="${x}" cy="${y}" r="${r}" fill="transparent" stroke="${ring}" stroke-width="${w*.45}" stroke-dasharray="${w*.9} ${w*.6}"/>`
@@ -1389,7 +1389,7 @@ function pickLayer(){
     if(open){   // the group's other ends: one big marker each, where it is on the map
       const rt = r*.9;
       g.m.forEach(i => { const it = D.items[i], [tx, ty] = other(it), onI = isOn(i);
-        lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round"/><line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/>`;
+        if(!onI) lines += `<line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="#000a" stroke-width="${w*1.4}" stroke-linecap="round"/><line x1="${tx}" y1="${ty}" x2="${x}" y2="${y}" stroke="${c}" stroke-width="${w*.8}" stroke-dasharray="${w*.2} ${w*1.8}" stroke-linecap="round"/>`;
         front += `<g data-pi="${i}"><circle cx="${tx}" cy="${ty}" r="${rt*1.6}" fill="transparent"/><circle cx="${tx}" cy="${ty}" r="${rt}" fill="#0b0e10" stroke="${onI ? "#fff" : c}" stroke-width="${w*(onI ? 1.1 : .7)}"/>` +
           glyph(tx, ty, rt*1.2, c) + tip(i) + `</g>`; });
     }
