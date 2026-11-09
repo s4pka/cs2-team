@@ -181,6 +181,8 @@ img,svg image{-webkit-user-drag:none}
 .okd{margin-left:auto;font:600 20px var(--display);font-variant-numeric:tabular-nums;white-space:nowrap}.okd small{font-size:11px;color:var(--mute);margin-right:4px}
 @media (max-width:760px){.mcb{min-height:110px;padding:14px;flex-wrap:wrap;gap:10px 14px}.mcb .mmap{font-size:26px}.mcb .sp{flex-basis:100%;height:0}
   .op{flex-wrap:wrap;gap:8px 10px}.oroles{order:3;flex-basis:100%}.oroles:empty{display:none}}
+.mside{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:4px 0}.mside .seg{background:var(--panel);border-radius:9px}.mside .seg:hover{background:var(--raise)}
+.mst{font:600 13px var(--display);letter-spacing:.12em;width:34px}.mst.t{color:#e9b75a}.mst.ct{color:#6fa8dc}
 .mtop{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .mmap{font:600 30px var(--display);letter-spacing:.04em}
 .mscore{font:600 24px var(--display)}.mscore.win{color:#5dd27a}.mscore.loss{color:#ef6b5b}
@@ -917,8 +919,8 @@ function mapCard(a, m, chance){
   const score = a.map === m && a.score ? `<span class="mscore ${a.score[0] > a.score[1] ? "win" : "loss"}">${a.score[0]}:${a.score[1]}</span>` : "";
   return `<section class="mc"><div class="mcb" style="--img:url(maps/${k}.webp)">
       <span class="mmap">${esc(mapName(m))}</span><span class="vbig" title="Наш шанс на победу">${Math.round(chance*100)}<small>%</small></span>${score}<span class="sp"></span>
-      ${lineups ? `<button class="btn" data-go="nades:${k}">${icon("layout-list")}Раскидки</button><button class="btn" data-go="board:${k}">${icon("pencil-ruler")}Доска</button>` : ""}
-    </div><div class="ops">${rows}</div></section>`;
+      ${lineups ? `<button class="btn" data-go="board:${k}">${icon("pencil-ruler")}Доска</button>` : ""}
+    </div><div class="ops">${rows}</div>${lineups ? ["t", "ct"].map(sd => `<div class="mside"><span class="mst ${sd}">${sd.toUpperCase()}</span>${(L.maps[k].sides[sd] || []).map((c, i) => c.items.length ? `<button class="seg" data-gocat="${k}:${sd}:${i}">${esc(c.name)}</button>` : "").join("")}</div>`).join("") : ""}</section>`;
 }
 function matchView(){
   const id = MT.cur, a = MT.data[id];
@@ -943,6 +945,7 @@ page.addEventListener("click", e => {
   if(b.hasAttribute("data-vreset")){ MT.bans[MT.cur] = [...(MT.real[MT.cur] || [])]; paintPage(); return; }
   if(b.dataset.gomap){ show("map", b.dataset.gomap); return; }
   if(b.dataset.go){ const [v, k] = b.dataset.go.split(":"); show(v, k); return; }
+  if(b.dataset.gocat){ const [k, sd, i] = b.dataset.gocat.split(":"); V.side = sd; V.cat = +i; show("nades", k); return; }
   if(b.dataset.pm){ V.cat = 0; show(V.view, b.dataset.pm); return; }
   if(b.dataset.ps){ V.side = b.dataset.ps; V.cat = 0; show("nades", S.map); return; }
   if(b.dataset.cat){ V.cat = +b.dataset.cat; show("nades", S.map); return; }
