@@ -182,9 +182,39 @@ img,svg image{-webkit-user-drag:none}
 .ib:disabled{opacity:.35;cursor:default}
 .app[data-view=board] .bonly{display:flex!important}
 .app[data-view=board] #sides,.app[data-view=board] #kinds,.app[data-view=board] #marks{display:none}
-@media (min-width:761px){.app[data-view=board]{grid-template-columns:56px 1fr}}
-.app[data-view=board] .side{display:none}
+@media (min-width:761px){.app[data-view=board]{grid-template-columns:56px 1fr 300px}.app[data-view=board].nocard{grid-template-columns:56px 1fr}}
+.app[data-view=board].nocard .side{display:none}
 .app[data-view=board] .stage{cursor:crosshair}
+/* viewing mode: the map, the steps, play and the player card; «Редактировать» shows the tools */
+.app[data-view=board].bview #btools,.app[data-view=board].bview #favs{display:none!important}
+.app[data-view=board].bview .stage,.app[data-view=board].bview .stage[data-tool]{cursor:grab}
+.app[data-view=board].pickon:not(.bview) #sides{display:flex}
+.seg.ed{display:flex;align-items:center;gap:6px;color:var(--fg)}
+.seg.ed svg{width:16px;height:16px}
+.bscrub{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);z-index:10;width:min(560px,calc(100% - 150px));padding:6px 12px}
+.bscrub input{width:100%;accent-color:var(--accent);margin:0}
+.app:not([data-view=board]) #bscrub{display:none!important}
+/* the player card: one block per player, what he does on the step (or on every step, with the whole round on) */
+.pc{display:flex;flex-direction:column;gap:12px}
+.pl{display:grid;grid-template-columns:26px 1fr;gap:4px 10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.pl:last-child{border-bottom:0}
+.pl>div{min-width:0}
+.pl .sw{width:24px;height:24px;font-size:13px;line-height:20px}
+.pl .pt{display:flex;align-items:center;gap:8px;font-weight:600;min-height:24px}
+.pl .pt .pk{margin-left:auto;display:flex;gap:4px}
+.pl .pw{color:var(--mute);font-size:13px}
+.pl .pg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px}
+.pl .pg span{display:inline-flex;align-items:center;gap:4px}
+.pl .pg svg.ki{width:15px;height:15px;stroke-width:2.2}
+.pl .ps{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:13px}
+.pl .ps b{font-weight:600;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pl .ps .pg{display:inline-flex}
+.pl input{width:100%;min-width:0;height:28px;background:#0b0f12;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:0 8px;font:500 13px var(--body);-webkit-user-select:text;user-select:text}
+.pl input:focus{border-color:var(--accent);outline:0}
+.pl .over{color:#ff5148}
+.kc{display:inline-flex;align-items:center;gap:2px;font-size:12px;color:var(--mute)}
+.kc img{width:16px;height:16px}
+.kc.over{color:#ff5148;background:#ff514822;border-radius:5px;padding:0 3px}
 .stage.loading #world,.stage.loading #marks,.stage.loading #links,.stage.loading #cards{visibility:hidden}
 .app[data-view=board] .stage[data-tool=select]{cursor:default}
 .app[data-view=board] .stage[data-tool=erase]{cursor:cell}
@@ -238,7 +268,10 @@ img,svg image{-webkit-user-drag:none}
   .btools .tg{flex-direction:row;gap:0}
   .btools .ib{width:32px;height:32px}
   .bsteps{left:8px;transform:none;bottom:8px;max-width:calc(100% - 16px);overflow-x:auto}
-  .app[data-view=board] .side{display:none}
+  .bscrub{left:8px;right:8px;width:auto;transform:none;bottom:54px}
+  .app:not(.bview) .bscrub{bottom:102px}
+  .app[data-view=board]:not(.bview) .side{display:none}
+  .app[data-view=board] .side{max-height:32vh}
   .app[data-view=board] .zoom{display:none}
   #zin,#zout{display:none}
 }
@@ -317,6 +350,7 @@ details summary{cursor:pointer;font-weight:600}
     <div class="binfo" id="binfo" hidden></div>
     <div class="binfo prac" id="prac" hidden></div>
     <div class="grp bsteps bonly" id="bsteps"></div>
+    <div class="grp bscrub" id="bscrub" hidden><input type="range" id="bscr" min="0" max="1" step="0.1" value="0" aria-label="Время раунда"></div>
     <div class="grp zoom">
       <button class="ib" id="zin"><i data-lucide="plus"></i></button>
       <button class="ib" id="zout"><i data-lucide="minus"></i></button>
@@ -392,14 +426,14 @@ $("favs").onclick = e => { const b = e.target.closest("[data-f]"); if(!b) return
 S.at = "from";
 const atOf = () => V.view === "board" ? BD.at : S.at, endOf = it => atOf() === "to" ? it.l : it.t;
 function endsBtns(){
-  const el = $("ends"), on = V.view === "map" || V.view === "board" && BD.tool === "pick"; el.hidden = !on; if(!on) return;
+  const el = $("ends"), on = V.view === "map" || V.view === "board" && BD.edit && BD.tool === "pick"; el.hidden = !on; if(!on) return;
   el.innerHTML = [["from", "person-standing", "Откуда кидают"], ["to", "arrow-down-to-dot", "Куда падает"]].map(([v, ic, l]) => `<button class="ib" data-at="${v}" aria-pressed="${atOf() === v}" aria-label="${l}">${icon(ic)}<span class="tip down">${l}</span></button>`).join(""); draw();
 }
 $("ends").onclick = e => { const b = e.target.closest("[data-at]"); if(!b) return;
   if(V.view === "board"){ BD.at = b.dataset.at; BD.pk = {open:-1, hot:-1}; paint(); } else { S.at = b.dataset.at; S.sel = S.open = null; render(); } endsBtns(); };
 const sideBtns = () => { $("sides").innerHTML = [["all","Все"],["t","T"],["ct","CT"]].map(([v,l]) => `<button class="seg" data-v="${v}" aria-pressed="${S.side===v}">${l}</button>`).join(""); };
 const kindBtns = () => { $("kinds").innerHTML = Object.keys(KIND).map(k => `<button class="ib" data-k="${k}" aria-pressed="${S.kinds.has(k)}">${kicon(k)}<span class="tip down">${KIND[k]}</span></button>`).join(""); };
-$("sides").onclick = e => { const b = e.target.closest("[data-v]"); if(!b) return; S.side = b.dataset.v; S.sel = S.open = null; if(S.side !== "all") V.side = S.side; sideBtns(); render(); };
+$("sides").onclick = e => { const b = e.target.closest("[data-v]"); if(!b) return; S.side = b.dataset.v; S.sel = S.open = null; if(S.side !== "all") V.side = S.side; sideBtns(); if(V.view === "board"){ BD.pk = {open:-1, hot:-1}; paint(); } else render(); };
 $("kinds").onclick = e => { const b = e.target.closest("[data-k]"); if(!b) return; const k = b.dataset.k; S.kinds.has(k) ? S.kinds.delete(k) : S.kinds.add(k); if(!S.kinds.size) S.kinds.add(k); S.sel = S.open = null; kindBtns(); render(); };
 $("layer").onclick = () => { S.names = !S.names; layerBtn(); paintImages(); };
 
@@ -410,7 +444,7 @@ function fit(){
   const r = stage.getBoundingClientRect(), bar = stage.querySelector(".bar").getBoundingClientRect(), under = bar.bottom - r.top + 4;
   const b0 = Math.min(r.width / D.w, (r.height - 8) / D.h), covered = (r.height - D.h*b0)/2 + 4 + D.ct*b0 < under;
   const top = innerWidth <= 760 || bar.height > 60 || covered ? under : 0;
-  const tools = V.view === "board" && innerWidth <= 760 ? r.bottom - $("btools").getBoundingClientRect().top + 4 : 0;   // phone board: the tools sit under the map
+  const tools = V.view === "board" && innerWidth <= 760 ? r.bottom - $(BD.edit ? "btools" : "bsteps").getBoundingClientRect().top + 4 : 0;   // phone board: the tools (in viewing, the steps) sit under the map
   const H = r.height - top - tools;
   base = Math.min(r.width / D.w, (H - 8) / D.h); S.z = 1; S.x = (r.width - D.w*base)/2; S.y = top + (H - D.h*base)/2 + 4; apply();
 }
@@ -424,7 +458,7 @@ function zoomAt(f, cx, cy){ const z = Math.min(6, Math.max(1, S.z*f)); f = z/S.z
 stage.addEventListener("wheel", e => { e.preventDefault(); const r = stage.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.15 : 1/1.15, e.clientX - r.left, e.clientY - r.top); }, {passive:false});
 const P = new Map(); let moved = 0, pinch = 0;
 let downT = null;
-stage.addEventListener("pointerdown", e => { downT = e.target; if(e.target.closest(".bar,.zoom,.card,.btools,.bsteps,.btext,.kpick,.binfo")) return; kindClose();
+stage.addEventListener("pointerdown", e => { downT = e.target; if(e.target.closest(".bar,.zoom,.card,.btools,.bsteps,.bscrub,.btext,.kpick,.binfo")) return; kindClose();
   if(V.view === "map" && INK.on){
     if(INK.cur && e.pointerType === "touch"){ INK.cur = null; inkPaint(); if(INK.last) P.set(INK.pid, INK.last); moved = 99; }   // a second finger: zoom, not draw
     else if(e.button === 0){ INK.cur = [pt(e)]; INK.pid = e.pointerId; INK.last = [e.clientX, e.clientY]; try { stage.setPointerCapture(e.pointerId); } catch(_){} return; }
@@ -445,7 +479,7 @@ stage.addEventListener("pointerup", e => {
   if(V.view === "board"){ const f = BD.fixedDown; BD.fixedDown = null;
     if(BD.drag) boardUp();
     else if(f){ if(moved <= 4){ if(f.tg){ BD.fan = BD.fan === f.tg ? null : f.tg; paint(); } else if(f.ts){ BD.sel = -1; toggleInfo(objs()[f.i].id); } else { BD.sel = f.i; paint(); } } }
-    else if(moved <= 4 && BD.tool === "select" && !e.target.closest("[data-i],[data-tg],.bar,.zoom,.btools,.bsteps,.card,.binfo,.kpick")) { BD.sel = -1; BD.info = null; BD.fan = null; paint(); } end(e); return; }
+    else if(moved <= 4 && (BD.tool === "select" || !BD.edit) && !e.target.closest("[data-i],[data-tg],.bar,.zoom,.btools,.bsteps,.bscrub,.card,.binfo,.kpick")) { BD.sel = -1; BD.info = null; BD.fan = null; paint(); } end(e); return; }
   const wasDrag = moved > 4; end(e); if(wasDrag || e.button !== 0) return; const t = downT && downT.closest("[data-i],[data-c]"); if(t) pick(t); else if(!(downT && downT.closest(".bar,.zoom,.card"))){ S.sel = S.open = null; S.video = false; render(); } });
 stage.addEventListener("pointercancel", e => { BD.fixedDown = null; if(BD.drag){ BD.drag = null; paint(); } end(e); });
 $("zin").onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.4, r.width/2, r.height/2); };
@@ -735,7 +769,11 @@ function nadesView(){
 /* ---------- board: drawn in radar pixels inside the map's world, so it pans, zooms and switches maps with it ---------- */
 const COLORS = ["#ff5148","#38c6ff","#ffd02e","#6fe36b","#ff7be0","#ffffff"];
 const NC = KC;
-const BD = {tool:"pen", color:0, kind:"smoke", steps:[{o:[], note:""}], cur:0, undo:[], redo:[], drag:null, sure:false, sel:-1, shared:"", space:false, play:null};
+const BD = {tool:"pen", color:0, kind:"smoke", steps:[{o:[], note:""}], cur:0, undo:[], redo:[], drag:null, sure:false, sel:-1, shared:"", space:false, play:null, edit:false};
+// playback speeds of the round: StratPad exports at 1x, 2x, 4x; demo viewers (pableeee/cs-demo-viewer) go to 8x
+const SPEEDS = [1, 2, 4, 8];
+BD.speed = store(s => SPEEDS.includes(+s.getItem("cs2speed")) ? +s.getItem("cs2speed") : 2, 2);
+BD.all = store(s => s.getItem("cs2round") !== "0", true);   // the whole round: every step's walks and grenades at once
 const objs = () => BD.steps[BD.cur].o;
 const BKEY = () => "cs2board2:" + S.map;
 const LW = () => D.w/220;   // line width in radar pixels
@@ -814,8 +852,9 @@ function obj(o, i){
   // what a player carries: the bomb as a badge, grenades as a strip under the token (as boltobserv marks the carrier)
   const kit = (r) => (o.c4 ? `<circle cx="${r1(r*.8)}" cy="${r1(-r*.8)}" r="${r1(w*1.9)}" fill="#0b0e10" stroke="#ff5148" stroke-width="${w*.4}"/><image href="${NI.c4}" x="${r1(r*.8-w*1.3)}" y="${r1(-r*.8-w*1.3)}" width="${r1(w*2.6)}" height="${r1(w*2.6)}"/>` : "") + invPill(o.inv, 0, r + w*3.4);
   // with the lineups tool, the player who gets the next lineup wears a white ring
-  const who = o.t === "tok" && BD.tool === "pick" && !BD.play && i >= 0 && o.n === Math.min(BD.color, 4)+1 ? `<circle r="${r1(w*5.2)}" fill="none" stroke="#fff" stroke-width="${r1(w*.6)}" stroke-dasharray="${r1(w*1.2)} ${r1(w*.8)}"/>` : "";
-  if(o.t === "tok") return g(who + blindRing(blinded(o), w*3.6, w) + (o.dead ? dead(w*3.6) : `<circle r="${w*3.6}" fill="${o.c}" stroke="#0b0e10" stroke-width="${w*.8}"/><text text-anchor="middle" dy=".35em" font-size="${w*4.4}" font-weight="700" font-family="system-ui,sans-serif" fill="#0b0e10">${o.n}</text>`) + kit(w*3.6), o.c);
+  const who = o.t === "tok" && BD.edit && BD.tool === "pick" && !BD.play && i >= 0 && o.n === Math.min(BD.color, 4)+1 ? `<circle r="${r1(w*5.2)}" fill="none" stroke="#fff" stroke-width="${r1(w*.6)}" stroke-dasharray="${r1(w*1.2)} ${r1(w*.8)}"/>` : "";
+  const tag = o.t === "tok" && pname(o.n) ? `<text y="${r1(-w*5.6)}" text-anchor="middle" font-size="${r1(w*3)}" font-weight="600" font-family="Golos Text,system-ui,sans-serif" fill="${o.c}" stroke="#0b0e10" stroke-width="${r1(w*1.1)}" paint-order="stroke">${esc(pname(o.n))}</text>` : "";
+  if(o.t === "tok") return g(who + blindRing(blinded(o), w*3.6, w) + (o.dead ? dead(w*3.6) : `<circle r="${w*3.6}" fill="${o.c}" stroke="#0b0e10" stroke-width="${w*.8}"/><text text-anchor="middle" dy=".35em" font-size="${w*4.4}" font-weight="700" font-family="system-ui,sans-serif" fill="#0b0e10">${o.n}</text>`) + kit(w*3.6) + tag, o.c);
   if(o.t === "foe") return g(blindRing(blinded(o), w*3.2, w) + (o.dead ? dead(w*3.2) : `<circle r="${w*3.2}" fill="#0b0e10" stroke="#ff5148" stroke-width="${w*1.1}"/><circle r="${w*1.1}" fill="#ff5148"/>`), "#ff5148");
   if(o.t === "c4"){ const r = w*3.6; return g(`<circle r="${r}" fill="#0b0e10" stroke="#ff5148" stroke-width="${w*.8}"/><image href="${NI.c4}" x="${-r*.7}" y="${-r*.7}" width="${r*1.4}" height="${r*1.4}"/>`); }
   if(o.t === "dead") return g(dead(w*3.2));
@@ -878,7 +917,7 @@ function groupLayer(groups){
 }
 // players and enemies are drawn over the marks and lineups, so a player standing on a throw spot stays visible
 function boardSvg(){ const gs = lnGroups(), list = objs(), up = o => turnable(o) ? 1 : 0; BD.grouped = new Set(gs.flatMap(g => g.m)); BD.carry = carried(BD.cur); BD.smokes = smokesNow();
-  const s = walkLayer() + BD.carry.map(o => o.t === "ln" ? blast(o.k, o.lx, o.ly, o.id) : blast(o.k, o.x, o.y, o.id)).join("") +
+  const s = allLayer() + walkLayer() + BD.carry.map(o => o.t === "ln" ? blast(o.k, o.lx, o.ly, o.id) : blast(o.k, o.x, o.y, o.id)).join("") +
     list.map((o, i) => i).sort((a, b) => up(list[a]) - up(list[b])).map(i => obj(list[i], i)).join("") + putOut() + groupLayer(gs);
   BD.grouped = BD.smokes = BD.carry = null; return s; }
 /* Walls: the awpy-data collision and nav meshes (book/geo: build_geo.py makes the data, geo.js answers in a worker).
@@ -1082,10 +1121,11 @@ $("binfo").addEventListener("click", e => { const s = boardInfo(); if(!s) return
 function toggleInfo(id){ BD.info = BD.info === id ? null : id; S.video = false; cards.key = null; paint(); }
 function paint(){
   if(V.view !== "board") { $("objs").innerHTML = $("pickg").innerHTML = ""; return; }
+  if(BD.play){ $("pickg").innerHTML = ""; frame(); return; }
   infoCards(); BD.pz = base*S.z; geoLoad(); geoSmokes();
   paintList(boardSvg() + (BD.drag && BD.drag.ghost ? obj(BD.drag.ghost, -1) : ""));
   const tm = !BD.timing && !BD.play && document.querySelector("#bsteps .tm"); if(tm){ const h = timeChip().replace(/^<button[^>]*>|<\/button>$/g, ""); if(h.startsWith("<span") && tm.innerHTML !== h) tm.innerHTML = h; }   // walk times arrive after the paint
-  $("pickg").innerHTML = BD.tool === "pick" && !BD.play ? pickLayer() : BD.tool === "throw" && BD.th ? throwGhost() : BD.tool === "run" && BD.th && BD.thTo ? runLayer({a:BD.th, b:BD.thTo, id:"ghost"}, LW()).replace(/<text[\s\S]*$/, "") : "";
+  $("pickg").innerHTML = !BD.edit ? "" : BD.tool === "pick" && !BD.play ? pickLayer() : BD.tool === "throw" && BD.th ? throwGhost() : BD.tool === "run" && BD.th && BD.thTo ? runLayer({a:BD.th, b:BD.thTo, id:"ghost"}, LW()).replace(/<text[\s\S]*$/, "") : "";
 }
 
 // pointer: one pointer draws or moves; a second finger, the middle button or a held Space pans and zooms like the map
@@ -1097,6 +1137,13 @@ function cancelDrag(){
   paint();
 }
 function boardDown(e){
+  if(!BD.edit){
+    if(e.button !== 0 || BD.play) return true;
+    const tg = e.target.closest("[data-tg]"), i = hit(e), o = objs()[i];
+    if(tg){ BD.fixedDown = {tg:tg.dataset.tg}; return true; }
+    if(o && o.t === "ln" && o.ref && e.target.closest("[data-ts]")) BD.fixedDown = {i, ts:true};
+    return true;
+  }
   if(BD.play) stopPlay();
   if(BD.drag && e.pointerType === "touch"){ const d = BD.drag; cancelDrag(); if(d.last) P.set(d.pid, d.last); moved = 99; return true; }
   if(e.button === 1 || BD.space){ e.preventDefault(); return true; }
@@ -1219,7 +1266,7 @@ stage.addEventListener("dblclick", e => { if(V.view !== "board") return; const i
 // steps, played one after another: tokens with the same number or id move, as on Gamecoach's slides
 function goStep(k){ if(k < 0 || k >= BD.steps.length) return; if(BD.play) stopPlay(); BD.cur = k; BD.info = null; BD.sel = -1; BD.sure = false; boardUI(); }
 function addStep(){ push(); BD.steps.splice(BD.cur+1, 0, {o:objs().filter(o => KEEP.includes(o.t)).map(clone), note:""}); BD.cur++; BD.sel = -1; saveBoard(); boardUI(); }
-function delStep(){ if(BD.steps.length < 2) return; push(); BD.steps.splice(BD.cur, 1); BD.cur = Math.min(BD.cur, BD.steps.length-1); BD.sel = -1; saveBoard(); boardUI(); }
+function delStep(){ if(BD.steps.length < 2) return; push(); const nm = BD.steps[0].names; BD.steps.splice(BD.cur, 1); if(nm && !BD.steps[0].names) BD.steps[0].names = nm; BD.cur = Math.min(BD.cur, BD.steps.length-1); BD.sel = -1; saveBoard(); boardUI(); }
 const keyOf = o => o.t === "tok" ? "t" + o.n : o.id ? o.t + o.id : null;
 /* A tactic as a round, after StratPad (cs2analysis.com/stratpad, tried 2026-11-09): between two steps every player walks
    the nav mesh at rifle speed (215 u/s, geo.js); a step's clock is the owner's, or the step before minus the longest
@@ -1291,26 +1338,111 @@ function roundAt(T, k, C, M, G){
     (turnable(o) ? people : out).push(obj(p, -1)); });
   return out.join("") + people.join("");
 }
+/* ▶ plays the round; the button then pauses and plays on. The bar under the steps scrubs the round clock and the chip
+   beside ▶ sets the speed, as demo viewers do (pableeee/cs-demo-viewer: a scrubber and 0.5x-8x; StratPad: 1x, 2x, 4x).
+   A step, an arrow key or «Редактировать» leaves the round for the steps. */
 function play(){
-  if(BD.play){ stopPlay(); return; }
+  const p = BD.play;
+  if(p){ p.paused = !p.paused; if(!p.paused && p.T <= p.R.end + .05) p.T = p.R.T0; p.last = performance.now(); boardBars(); if(!p.paused) loop(); return; }
   if(BD.steps.length < 2) return;
   const n = BD.steps.length, C = BD.steps.map((s, k) => clock(k)), M = BD.steps.map((s, k) => moves(k)), G = [];
   BD.steps.forEach((s, k) => s.o.forEach(o => { if(o.t === "ln") G.push({o, at:C[k], air:airOf(o)}); else if(o.t === "nade") G.push({o, at:C[k], air:0}); }));
-  const end = Math.min(C[n-1] - 1.5, ...G.filter(g => g.at === C[n-1]).map(g => g.at - g.air - 1.5)), SPEED = 2, T0 = C[0];
-  BD.sel = -1; BD.info = null; BD.cur = 0; BD.play = {raf:0}; boardUI();
-  const t0 = performance.now();
-  const tick = now => {
-    if(!BD.play) return;
-    const T = T0 - (now - t0)/1000*SPEED; let k = 0; while(k < n-1 && T <= C[k+1]) k++;
-    if(k !== BD.cur){ BD.cur = k; boardBars(); }
-    const tm = document.querySelector("#bsteps .tm"); if(tm) tm.textContent = clockStr(T);
-    paintList(roundAt(T, k, C, M, G));
-    if(T <= end){ stopPlay(); return; }
-    BD.play.raf = requestAnimationFrame(tick);
-  };
-  BD.play.raf = requestAnimationFrame(tick);
+  const end = Math.min(C[n-1] - 1.5, ...G.filter(g => g.at === C[n-1]).map(g => g.at - g.air - 1.5));
+  BD.sel = -1; BD.info = null; BD.cur = 0; BD.play = {raf:0, R:{n, C, M, G, end, T0:C[0]}, T:C[0], paused:false, last:performance.now()};
+  const sc = $("bscr"); sc.max = r1(C[0] - end); sc.value = 0; $("bscrub").hidden = false;
+  boardUI(); loop();
 }
-function stopPlay(){ if(!BD.play) return; cancelAnimationFrame(BD.play.raf); BD.play = null; boardUI(); }
+// one picture of the round at the playback clock
+function frame(){
+  const p = BD.play, R = p.R; let k = 0; while(k < R.n-1 && p.T <= R.C[k+1]) k++;
+  if(k !== BD.cur){ BD.cur = k; boardBars(); }
+  const tm = document.querySelector("#bsteps .tm"); if(tm) tm.textContent = clockStr(p.T);
+  if(!frame.drag) $("bscr").value = r1(R.T0 - p.T);
+  paintList(roundAt(p.T, k, R.C, R.M, R.G));
+}
+function loop(){
+  const p = BD.play; if(!p) return; cancelAnimationFrame(p.raf);
+  const tick = now => { if(BD.play !== p || p.paused) return;
+    p.T -= Math.max(0, now - p.last)/1000*BD.speed; p.last = now;
+    if(p.T <= p.R.end){ p.T = p.R.end; p.paused = true; frame(); boardBars(); return; }
+    frame(); p.raf = requestAnimationFrame(tick); };
+  p.last = performance.now(); p.raf = requestAnimationFrame(tick);
+}
+function stopPlay(){ if(!BD.play) return; cancelAnimationFrame(BD.play.raf); BD.play = null; $("bscrub").hidden = true; boardUI(); }
+$("bscr").addEventListener("input", e => { const p = BD.play; if(!p) return; frame.drag = true; p.T = p.R.T0 - +e.target.value; p.last = performance.now(); frame(); frame.drag = false; });
+$("bscrub").addEventListener("pointerdown", e => e.stopPropagation());
+
+/* the whole round at once: every step's walks in the player's colour, each spot he stands on with its step number,
+   and the other steps' grenades faded, over the step on screen (the ghost trails of tactic boards, evjester/tactical-board) */
+function allLayer(){
+  if(!BD.all || BD.steps.length < 2) return "";
+  const w = LW(), out = [], dots = [], seen = new Set();
+  for(let k = 1; k < BD.steps.length; k++){ if(k === BD.cur) continue;
+    moves(k).forEach(m => { const c = m.o.t === "tok" ? m.o.c : "#ff5148", d = smooth(m.pts);
+      out.push(`<path d="${d}" fill="none" stroke="#000a" stroke-width="${w*.9}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".6"/><path d="${d}" fill="none" stroke="${c}" stroke-opacity=".6" stroke-width="${w*.45}" stroke-dasharray="${w*1.4} ${w}" stroke-linecap="round" stroke-linejoin="round"/>`); }); }
+  const here = new Set(objs().filter(o => o.t === "tok").map(o => `${o.n}|${o.x},${o.y}`));
+  BD.steps.forEach((s, k) => s.o.forEach(o => { if(o.t !== "tok" || o.dead) return; const key = `${o.n}|${o.x},${o.y}`; if(seen.has(key) || here.has(key)) return; seen.add(key);
+    dots.push(`<circle cx="${o.x}" cy="${o.y}" r="${r1(w*2)}" fill="${o.c}" fill-opacity=".75" stroke="#0b0e10" stroke-width="${r1(w*.4)}"/><text x="${o.x}" y="${o.y}" dy=".35em" text-anchor="middle" font-size="${r1(w*2.4)}" font-weight="700" font-family="system-ui,sans-serif" fill="#0b0e10">${k+1}</text>`); }));
+  BD.steps.forEach((s, k) => { if(k === BD.cur) return; s.o.forEach(o => { if(o.t === "ln" || o.t === "nade") out.push(`<g opacity=".35">${obj(o, -1)}</g>`); }); });
+  return `<g pointer-events="none">${out.join("")}${dots.join("")}</g>`;
+}
+
+/* the player card, as amateur teams write a tactic: one block per player with his name, where he stands on the step,
+   which grenades he throws and when (a step's grenades go at its clock), and a short note; with the whole round on,
+   one line per step. The grenade count checks the carry limits of competitive play: one of each kind, two flashes,
+   four in all (gamemode_competitive.cfg and DumpSource2/convars.txt of SteamDatabase/GameTracking-CS2, commit cce7bf1). */
+const LIMIT = {smoke:1, flash:2, molotov:1, he:1}, LIMIT_ALL = 4;
+const pname = n => ((BD.steps[0].names || {})[n] || "").trim();
+// the nearest nades.ai place name among this map's throw spots and landings, within about 260 units
+function placeOf(x, y){ let best = "", d0 = 260/(D.scale || 5);
+  D.items.forEach(it => [[it.t, it.from], [it.l, it.to]].forEach(([q, nm]) => { const d = Math.hypot(q[0]-x, q[1]-y); if(nm && d < d0){ d0 = d; best = nm; } }));
+  return best; }
+const lnTo = o => { const it = o.ref && D.items.find(it => it.k === o.ref); return it ? it.to : placeOf(o.lx, o.ly); };
+function nadesOf(n){ const c = {}; BD.steps.forEach(s => s.o.forEach(o => { if(o.t === "ln" && o.by === n) c[o.k] = (c[o.k] || 0) + 1; })); return c; }
+function kitChips(n){
+  const c = nadesOf(n), all = Object.values(c).reduce((a, b) => a + b, 0);
+  return Object.keys(KIND).filter(k => c[k]).map(k => `<span class="kc${c[k] > LIMIT[k] ? " over" : ""}" title="${KIND[k]}"><img src="${gimg(k)}" alt="">${c[k] > 1 ? "×" + c[k] : ""}</span>`).join("") +
+    (all > LIMIT_ALL ? `<span class="kc over" title="Больше ${LIMIT_ALL} гранат">${all}/${LIMIT_ALL}</span>` : "");
+}
+function stepNades(k, n){
+  const t = clockStr(clock(k)), list = BD.steps[k].o.filter(o => o.t === "ln" && o.by === n), spots = new Set(list.map(o => `${o.tx},${o.ty}`));
+  return list.map(o => `<span${spots.size > 1 ? ` class="over" title="Две точки броска в одном шаге"` : ""}>${kicon(o.k)}${esc(lnTo(o) || KIND[o.k])} <b>${t}</b></span>`).join("");
+}
+function cardHtml(){
+  const k = BD.cur, round = BD.all && BD.steps.length > 1, nums = [1, 2, 3, 4, 5].filter(n => BD.edit || BD.steps.some(s => s.o.some(o => o.t === "tok" && o.n === n)));
+  if(!nums.length) return "";
+  const head = round ? "Весь раунд" : `Шаг ${k+1} · ${clockStr(clock(k))}`;
+  return `<div class="pc"><div class="eyebrow">${head}</div>` + nums.map(n => {
+    const nm = pname(n), tok = objs().find(o => o.t === "tok" && o.n === n);
+    const title = BD.edit ? `<input data-pname="${n}" maxlength="24" placeholder="Игрок ${n}" value="${esc(nm)}">` : `<span>${esc(nm || "Игрок " + n)}</span>`;
+    let body = "";
+    if(round){
+      const rows = []; let last = "";
+      BD.steps.forEach((s, j) => { const p = s.o.find(o => o.t === "tok" && o.n === n), at = p ? `${p.x},${p.y}` : "", g = stepNades(j, n), note = ((s.pn || {})[n] || "").trim();
+        if(!p && !g && !note) return; const where = p && at !== last ? placeOf(p.x, p.y) : ""; last = at;
+        if(j && !where && !g && !note && !(p && p.dead)) return;
+        rows.push(`<b>${j+1} · ${clockStr(clock(j))}</b><span>${[p && p.dead ? "убит" : esc(where), g ? `<span class="pg">${g}</span>` : "", esc(note)].filter(Boolean).join(" · ") || "—"}</span>`); });
+      body = `<div class="ps">${rows.join("")}</div>`;
+    } else {
+      const where = tok ? (tok.dead ? "убит" : placeOf(tok.x, tok.y)) : "", g = stepNades(k, n), note = ((BD.steps[k].pn || {})[n] || "");
+      body = (where ? `<div class="pw">${esc(where)}</div>` : "") + (g ? `<div class="pg">${g}</div>` : "") +
+        (BD.edit ? `<input data-pnote="${n}" maxlength="80" placeholder="Что делает" value="${esc(note)}">` : note ? `<div>${esc(note)}</div>` : "");
+    }
+    return `<div class="pl"><span class="sw" style="--c:${COLORS[n-1]}">${n}</span><div><div class="pt">${title}<span class="pk">${kitChips(n)}</span></div>${body}</div></div>`;
+  }).join("") + `</div>`;
+}
+function cardUI(){
+  if(V.view !== "board") return; const el = $("side"), app = document.querySelector(".app");
+  if(el.contains(document.activeElement) && document.activeElement.matches("input")) return;   // typing a name or a note
+  const h = cardHtml(), was = app.classList.contains("nocard"); app.classList.toggle("nocard", !h); if(el.innerHTML !== h){ el.innerHTML = h; draw(); }
+  if(was !== !h) fit();
+}
+$("side").addEventListener("change", e => { if(V.view !== "board") return; const t = e.target, v = t.value.trim();
+  if(t.dataset.pname){ push(); const m = {...(BD.steps[0].names || {})}; if(v) m[t.dataset.pname] = v; else delete m[t.dataset.pname]; BD.steps[0].names = m; }
+  else if(t.dataset.pnote){ push(); const st = BD.steps[BD.cur], m = {...(st.pn || {})}; if(v) m[t.dataset.pnote] = v; else delete m[t.dataset.pnote]; st.pn = m; }
+  else return;
+  saveBoard(); t.blur(); paint(); boardBars(); });
+$("side").addEventListener("keydown", e => { if(V.view === "board" && e.target.matches("input") && e.key === "Enter") e.target.blur(); });
 
 // a picture of the step, and a link that carries the whole board (csdb.gg's tactical board keeps its board in the link too)
 async function exportPng(){
@@ -1414,8 +1546,8 @@ function mergeObjs(base, mine, theirs){
 function mergeSteps(base, mine, theirs){
   if(mine.length !== base.length) return mine;      // I added or removed a step: mine
   if(theirs.length !== base.length) return theirs;  // they did: theirs
-  return theirs.map((t, k) => { const b = base[k], m = mine[k], pick = f => (m[f] ?? "") !== (b[f] ?? "") ? m[f] : t[f];
-    const st = {...t, o:mergeObjs(b.o || [], m.o || [], t.o || [])}; ["time", "note"].forEach(f => { const v = pick(f); if(v === undefined || v === "") delete st[f]; else st[f] = v; }); if(st.note === undefined) st.note = ""; return st; });
+  return theirs.map((t, k) => { const b = base[k], m = mine[k], pick = f => JSON.stringify(m[f] ?? "") !== JSON.stringify(b[f] ?? "") ? m[f] : t[f];
+    const st = {...t, o:mergeObjs(b.o || [], m.o || [], t.o || [])}; ["time", "note", "names", "pn"].forEach(f => { const v = pick(f); if(v === undefined || v === "") delete st[f]; else st[f] = v; }); if(st.note === undefined) st.note = ""; return st; });
 }
 async function nameDone(){
   const v = ($("bname") || {}).value, name = (v || "").trim().slice(0, 40), mode = BD.naming; BD.naming = "";
@@ -1445,7 +1577,7 @@ BD.timing = false;
 function timeChip(){
   const t = BD.steps[BD.cur].time || "", auto = !t && BD.steps.length > 1 ? clockStr(clock(BD.cur)) : "";   // no own time: the walks give it, shown dimmed
   return BD.timing ? `<input id="btime" class="btime" maxlength="5" placeholder="${auto || "1:55"}" value="${esc(t)}">`
-    : `<button type="button" class="seg tm" data-act="time" title="Время раунда">${t || (auto ? `<span style="opacity:.55">${auto}</span>` : icon("clock"))}</button>`;
+    : `<button type="button" class="seg tm" data-act="${BD.edit ? "time" : ""}" title="Время раунда">${t || (auto ? `<span style="opacity:.55">${auto}</span>` : icon("clock"))}</button>`;
 }
 function timeDone(ok){
   const el = $("btime"), v = (el && el.value || "").trim(); BD.timing = false;
@@ -1460,37 +1592,48 @@ $("bsteps").addEventListener("focusout", e => { if(e.target.id === "btime" && BD
 const bb = (act, label, ic, off) => `<button type="button" class="ib" data-act="${act}" title="${label}" aria-label="${label}"${off ? " disabled" : ""}>${icon(ic)}</button>`;
 function boardBars(){
   if(V.view !== "board") return;
-  $("bacts").innerHTML = picker() + (BD.shared ? bb("keep", "Оставить себе", "bookmark-plus") + bb("own", "Закрыть", "x") : "") +
-    bb("undo", "Отменить (Ctrl+Z)", "undo-2", !BD.undo.length) + bb("redo", "Вернуть (Ctrl+Y)", "redo-2", !BD.redo.length) +
-    `<button type="button" class="ib${BD.sure ? " danger" : ""}" data-act="clear" title="Очистить шаг" aria-label="Очистить шаг">${icon("trash-2")}</button>` + bb("png", "Картинка", "image-down") + bb("link", "Ссылка", "link") + (document.fullscreenEnabled ? bb("full", "Во весь экран", "maximize") : "");
-  $("bsteps").innerHTML = bb("prev", "Предыдущий шаг (←)", "chevron-left", BD.cur === 0) +
+  const ed = BD.edit, p = BD.play, n = BD.steps.length;
+  $("bacts").innerHTML = `<button type="button" class="seg ed" data-act="edit" aria-pressed="${ed}">${icon(ed ? "check" : "pencil")}${ed ? "Готово" : "Редактировать"}</button>` +
+    picker() + (BD.shared ? bb("keep", "Оставить себе", "bookmark-plus") + bb("own", "Закрыть", "x") : "") +
+    (ed ? bb("undo", "Отменить (Ctrl+Z)", "undo-2", !BD.undo.length) + bb("redo", "Вернуть (Ctrl+Y)", "redo-2", !BD.redo.length) +
+      `<button type="button" class="ib${BD.sure ? " danger" : ""}" data-act="clear" title="Очистить шаг" aria-label="Очистить шаг">${icon("trash-2")}</button>` : "") +
+    bb("png", "Картинка", "image-down") + bb("link", "Ссылка", "link") + (document.fullscreenEnabled ? bb("full", "Во весь экран", "maximize") : "");
+  $("bsteps").innerHTML = bb("prev", "Предыдущий шаг (←)", "chevron-left", BD.cur === 0 && !p) +
     BD.steps.map((s, k) => `<button type="button" class="seg" data-step="${k}" aria-pressed="${k === BD.cur}" title="Шаг ${k+1}${s.time ? ", " + s.time : ""}">${k+1}</button>`).join("") +
-    bb("next", "Следующий шаг (→)", "chevron-right", BD.cur === BD.steps.length-1) + bb("add", "Новый шаг", "plus") +
-    bb("del", "Удалить шаг", "minus", BD.steps.length < 2) + bb("play", BD.play ? "Стоп" : "Проиграть шаги", BD.play ? "square" : "play", BD.steps.length < 2) + timeChip();
-  draw();
+    bb("next", "Следующий шаг (→)", "chevron-right", BD.cur === n-1) +
+    (ed ? bb("add", "Новый шаг", "plus") + bb("del", "Удалить шаг", "minus", n < 2) : "") +
+    bb("play", p && !p.paused ? "Пауза (пробел)" : "Проиграть раунд (пробел)", p && !p.paused ? "pause" : "play", n < 2) +
+    `<button type="button" class="seg" data-act="speed" title="Скорость">${BD.speed}×</button>` +
+    `<button type="button" class="ib" data-act="all" aria-pressed="${BD.all}" title="Весь раунд" aria-label="Весь раунд"${n < 2 ? " disabled" : ""}>${icon("route")}</button>` + timeChip();
+  cardUI(); draw();
 }
 function boardUI(){
   if(V.view !== "board") return;
-  stage.dataset.tool = BD.tool;
+  const app = document.querySelector(".app"); app.classList.toggle("bview", !BD.edit);
+  stage.dataset.tool = BD.edit ? BD.tool : "view";
   const n = Math.min(BD.color, 4)+1, on = id => BD.tool === id;
   const t = (id, label, inner) => `<button type="button" class="ib" data-tool="${id}" aria-pressed="${on(id)}" title="${label}" aria-label="${label}">${inner}</button>`;
+  const more = MORE().find(m => m[0] === BD.tool);
   $("btools").innerHTML = [
     t("select", "Выбрать (S)", icon("mouse-pointer-2")),
     t("pen", "Рисовать (Q)", icon("pencil")),
     `<button type="button" class="ib" data-spick aria-pressed="${!!SHAPE[BD.tool]}" title="Фигуры" aria-label="Фигуры">${icon(SHAPE[BD.tool] ? SHAPE[BD.tool][1] : "shapes")}</button>`,
     t("erase", "Стереть (R)", icon("eraser")), "<hr>",
-    t("tok", `Игрок ${n} (E)`, `<span class="sw" style="--c:${COLORS[n-1]}">${n}</span>`),
-    t("foe", "Противник", `<span class="sw" style="--c:#0b0e10;border-color:#ff5148;box-shadow:inset 0 0 0 5px #0b0e10,inset 0 0 0 9px #ff5148"></span>`),
-    t("c4", "Бомба", `<img src="${NI.c4}" alt="">`), t("dead", "Убит", icon("skull")), "<hr>",
+    t("tok", `Игрок ${n} (E)`, `<span class="sw" style="--c:${COLORS[n-1]}">${n}</span>`), "<hr>",
     `<span class="tg">`, t("pick", "Раскидки", `<i data-lucide="layout-list" style="color:${KC[BD.kind]}"></i>`),
-    t("throw", "С руки", `<i data-lucide="spline" style="color:${KC[BD.kind]}"></i>`),
-    t("fx", "Эффект", kicon(BD.kind)), t("drop", "Граната", `<img class="gi" src="${gimg(BD.kind)}" alt="">`), `</span>`, "<hr>",
-    ...(window.Geo ? [`<span class="tg">`, t("eye", "Кто видит", icon("eye")), t("run", "Путь и время", icon("footprints")), `</span>`, "<hr>"] : []),
-    `<button type="button" class="ib" data-cpick title="Цвет (1–6)" aria-label="Цвет"><span class="sw" style="--c:${COLORS[BD.color]}"></span></button>`
+    t("throw", "С руки", `<i data-lucide="spline" style="color:${KC[BD.kind]}"></i>`), `</span>`, "<hr>",
+    `<button type="button" class="ib" data-more aria-pressed="${!!more}" title="Ещё" aria-label="Ещё">${more ? more[2]() : icon("ellipsis")}</button>`
   ].join("");
-  document.querySelector(".app").classList.toggle("pickon", BD.tool === "pick");
+  app.classList.toggle("pickon", BD.edit && BD.tool === "pick");
   boardBars(); endsBtns(); paint(); draw();
 }
+// the tools under «Ещё»: enemy, bomb, dead, effect, grenade on the floor, sight, walk, and the colours
+const MORE = () => [
+  ["foe", "Противник", () => `<span class="sw" style="--c:#0b0e10;border-color:#ff5148;box-shadow:inset 0 0 0 5px #0b0e10,inset 0 0 0 9px #ff5148"></span>`],
+  ["c4", "Бомба", () => `<img src="${NI.c4}" alt="">`], ["dead", "Убит", () => icon("skull")],
+  ["fx", "Эффект", () => kicon(BD.kind)], ["drop", "Граната", () => `<img class="gi" src="${gimg(BD.kind)}" alt="">`],
+  ...(window.Geo ? [["eye", "Кто видит", () => icon("eye")], ["run", "Путь и время", () => icon("footprints")]] : []),
+  ["color", "Цвет (1–6)", () => `<span class="sw" style="--c:${COLORS[BD.color]}"></span>`]];
 function toast(t){
   let el = $("toast"); if(!el){ el = document.createElement("div"); el.id = "toast"; el.className = "toast"; stage.append(el); }
   el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2500);
@@ -1512,7 +1655,7 @@ const SHAPE = {arrow:["Стрелка (W)", "move-up-right"], rect:["Прямо�
 BD.at = "to";
 function pickClusters(){
   const out = [];
-  D.items.forEach((it, i) => { if(it.kind !== BD.kind || !onLevel(it) || onlyFav() && !FAV.ids.has(it.slug)) return; const e = endOf(it);
+  D.items.forEach((it, i) => { if(it.kind !== BD.kind || S.side !== "all" && it.side !== S.side || !onLevel(it) || onlyFav() && !FAV.ids.has(it.slug)) return; const e = endOf(it);
     const c = out.find(c => Math.hypot(c.l[0]-e[0], c.l[1]-e[1]) < 10); if(c) c.m.push(i); else out.push({l:e, m:[i]}); });
   return out;
 }
@@ -1572,19 +1715,22 @@ $("btools").addEventListener("click", e => { const b = e.target.closest("button"
   if(GT.includes(b.dataset.tool)){ kindPick(b, b.dataset.tool); return; }
   if(b.dataset.cpick !== undefined){ kindPick(b, "color"); return; }   // the six colours open beside the button, like the kinds
   if(b.dataset.spick !== undefined){ kindPick(b, "shape"); return; }   // arrow, rectangle, circle and text, the same way
+  if(b.dataset.more !== undefined){ kindPick(b, "more"); return; }
   kindClose(); if(b.dataset.tool) setTool(b.dataset.tool); if(b.dataset.color) setColor(+b.dataset.color); });
 // the grenade kinds, beside the grenade button (above it on phones)
 function kindPick(btn, mode){
   const el = $("kpick"); if(!el.hidden && el.dataset.mode === mode){ kindClose(); return; }
   el.dataset.mode = mode;
-  el.innerHTML = mode === "shape" ? Object.entries(SHAPE).map(([v, [l, ic]]) => `<button type="button" class="ib" data-shape="${v}" aria-pressed="${BD.tool === v}" title="${l}" aria-label="${l}">${icon(ic)}</button>`).join("") : mode === "color" ? COLORS.map((c, i) => `<button type="button" class="ib" data-color="${i}" aria-pressed="${BD.color === i}" title="Цвет (${i+1})"><span class="sw" style="--c:${c}"></span></button>`).join("") : Object.keys(KIND).map(k => `<button type="button" class="ib" data-kind="${k}" aria-pressed="${BD.tool === mode && BD.kind === k}" title="${KIND[k]}" aria-label="${KIND[k]}">${mode === "drop" ? `<img src="${gimg(k)}" alt="">` : kicon(k)}</button>`).join("");
+  el.innerHTML = mode === "more" ? MORE().map(([v, l, ic]) => `<button type="button" class="ib" data-mtool="${v}" aria-pressed="${BD.tool === v}" title="${l}" aria-label="${l}">${ic()}</button>`).join("") : mode === "shape" ? Object.entries(SHAPE).map(([v, [l, ic]]) => `<button type="button" class="ib" data-shape="${v}" aria-pressed="${BD.tool === v}" title="${l}" aria-label="${l}">${icon(ic)}</button>`).join("") : mode === "color" ? COLORS.map((c, i) => `<button type="button" class="ib" data-color="${i}" aria-pressed="${BD.color === i}" title="Цвет (${i+1})"><span class="sw" style="--c:${c}"></span></button>`).join("") : Object.keys(KIND).map(k => `<button type="button" class="ib" data-kind="${k}" aria-pressed="${BD.tool === mode && BD.kind === k}" title="${KIND[k]}" aria-label="${KIND[k]}">${mode === "drop" ? `<img src="${gimg(k)}" alt="">` : kicon(k)}</button>`).join("");
   el.hidden = false; draw();
   const r = btn.getBoundingClientRect(), s = stage.getBoundingClientRect();
   if(innerWidth <= 760){ el.style.left = `${Math.max(8, Math.min(r.left - s.left - 40, s.width - el.offsetWidth - 8))}px`; el.style.top = `${$("btools").getBoundingClientRect().top - s.top - el.offsetHeight - 6}px`; }
   else { el.style.left = `${r.right - s.left + 10}px`; el.style.top = `${r.top - s.top - 3}px`; }
 }
 function kindClose(){ $("kpick").hidden = true; }
-$("kpick").addEventListener("click", e => { const c = e.target.closest("[data-color]"); if(c){ kindClose(); setColor(+c.dataset.color); return; }
+$("kpick").addEventListener("click", e => { const mt = e.target.closest("[data-mtool]");
+  if(mt){ const v = mt.dataset.mtool, btn = $("btools").querySelector("[data-more]"); if(GT.includes(v) || v === "color") kindPick(btn, v); else { kindClose(); setTool(v); } return; }
+  const c = e.target.closest("[data-color]"); if(c){ kindClose(); setColor(+c.dataset.color); return; }
   const sh = e.target.closest("[data-shape]"); if(sh){ kindClose(); setTool(sh.dataset.shape); return; }
   const b = e.target.closest("[data-kind]"); if(!b) return; const mode = $("kpick").dataset.mode; kindClose(); setTool(mode + ":" + b.dataset.kind); });
 // a throw by hand while it is being marked: the spot, then the flight to the pointer
@@ -1600,11 +1746,21 @@ const ACT = {nameok:nameDone, namecancel:() => { BD.naming = ""; boardBars(); },
   full:() => document.fullscreenElement ? document.exitFullscreen() : stage.requestFullscreen().catch(() => {}),
   clear:() => { if(!objs().length) return; if(!BD.sure){ BD.sure = true; boardBars(); toast("Ещё раз — очистить"); return; } push(); BD.steps[BD.cur].o = []; BD.sure = false; BD.sel = -1; saveBoard(); boardUI(); },
   time:() => { BD.timing = true; boardBars(); setTimeout(() => { const el = $("btime"); if(el){ el.focus(); el.select(); } }, 0); },
-  prev:() => goStep(BD.cur-1), next:() => goStep(BD.cur+1), add:addStep, del:delStep, play};
+  prev:() => goStep(BD.play ? BD.cur : BD.cur-1), next:() => goStep(BD.cur+1), add:addStep, del:delStep, play,
+  speed:() => { BD.speed = SPEEDS[(SPEEDS.indexOf(BD.speed) + 1) % SPEEDS.length]; store(s => s.setItem("cs2speed", BD.speed)); boardBars(); },
+  all:() => { BD.all = !BD.all; store(s => s.setItem("cs2round", BD.all ? "1" : "0")); paint(); boardBars(); },
+  edit:() => { BD.edit = !BD.edit; if(BD.play) stopPlay(); BD.sel = -1; BD.info = null; BD.th = BD.thTo = null; kindClose(); boardUI(); fit(); }};
 ["bacts", "bsteps"].forEach(id => $(id).addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return;
   if(b.dataset.step) goStep(+b.dataset.step); else if(ACT[b.dataset.act]) ACT[b.dataset.act](); }));
 addEventListener("keydown", e => {
   if(V.view !== "board" || e.target.matches("input,textarea,select")) return;
+  if(!BD.edit){   // viewing: Space or K plays and pauses, the arrows step, Esc closes the photos
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(e.code === "Space" || e.code === "KeyK"){ e.preventDefault(); if(!e.repeat) play(); return; }
+    if(e.key === "Escape" && (BD.info || BD.fan)){ if(BD.info) BD.info = null; else BD.fan = null; paint(); return; }
+    if(e.key === "ArrowLeft") goStep(BD.play ? BD.cur : BD.cur-1); else if(e.key === "ArrowRight") goStep(BD.cur+1);
+    return;
+  }
   if(e.code === "Space"){ e.preventDefault(); if(!BD.space){ BD.space = true; stage.classList.add("pan"); } return; }
   if((e.ctrlKey || e.metaKey) && e.code === "KeyZ"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if((e.ctrlKey || e.metaKey) && e.code === "KeyY"){ e.preventDefault(); redo(); return; }
