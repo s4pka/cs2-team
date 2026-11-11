@@ -2021,8 +2021,9 @@ const CB = [
   apply:(t, v) => cbLine(t, /^sensitivity "[^"]*"\s*$/m, v)},
  {id:"cross", n:"Прицел", o:[["dot","Точка"],[null,"Свой"]], base:"dot",
   apply:(t, v) => v ? t : cbCut(t, "// ---------- Прицел", "// ---------- Клавиши")},
- {id:"jump", n:"Прыжок", o:[["wheel","Колесо мыши"],["space","Пробел"]], base:"wheel",
-  apply:(t, v) => v === "wheel" ? t : t.replace(/^\/\/ Прыжок на колесо[^\n]*\nbind "MWHEELUP" "\+jump"\nbind "MWHEELDOWN" "\+jump"\nunbind "SPACE"\n/m, 'bind "SPACE" "+jump"\nbind "MWHEELUP" "invprev"\nbind "MWHEELDOWN" "invnext"\n')},
+ {id:"jump", n:"Прыжок", o:[["wheel","Колесо мыши"],["space","Колесо и пробел"]], base:"wheel",
+  // weapons stay on the number keys either way: Space only adds a second jump key, the wheel keeps jumping
+  apply:(t, v) => v === "wheel" ? t : t.replace("пробел свободен", "и на пробел").replace(/^unbind "SPACE"\n/m, 'bind "SPACE" "+jump"\n')},
  {id:"vol", n:"Громкость", t:"num", min:0, max:1, step:"any", base:"0.5625",
   apply:(t, v) => cbLine(t, /^volume "[^"]*"\s*$/m, v)}
 ];
