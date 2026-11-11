@@ -583,15 +583,15 @@ function marker(it, x, y, dim, on){
 }
 function render(){
   const list = shown(), cl = clusters(list), sel = S.sel !== null ? D.items[S.sel] : null;
-  let m = "", l = "";
+  let m = "", l = "", top = "";   // the opened group last: on top, so its markers take the click (Leaflet.markercluster spiderfy)
   cl.forEach((c, ci) => {
     const [x,y] = scr(c.t), inSel = sel && c.m.some(it => it.i === S.sel), dim = (S.open !== null && S.open !== ci) || (sel && !inSel);
     if(c.m.length === 1){ m += marker(c.m[0], x, y, dim, inSel); return; }
     if(S.open === ci || inSel){
       const n = c.m.length, R = 30 + n*2;
-      m += `<circle cx="${x}" cy="${y}" r="5" fill="#e7ecef"/>`;
+      top += `<circle cx="${x}" cy="${y}" r="5" fill="#e7ecef"/>`;
       c.m.forEach((it, k) => { const a = -Math.PI/2 + k*2*Math.PI/n, px = x + R*Math.cos(a), py = y + R*Math.sin(a);
-        m += `<line x1="${x}" y1="${y}" x2="${px}" y2="${py}" stroke="#e7ecef55" stroke-width="1.5"/>` + marker(it, px, py, sel && it.i !== S.sel, it.i === S.sel); });
+        top += `<line x1="${x}" y1="${y}" x2="${px}" y2="${py}" stroke="#e7ecef55" stroke-width="1.5"/>` + marker(it, px, py, sel && it.i !== S.sel, it.i === S.sel); });
       return;
     }
     const kinds = [...new Set(c.m.map(it => it.kind))];
@@ -608,7 +608,7 @@ function render(){
       <path d="M${bx-9*Math.cos(ang)-5*Math.sin(ang)},${by-9*Math.sin(ang)+5*Math.cos(ang)} L${bx},${by} L${bx-9*Math.cos(ang)+5*Math.sin(ang)},${by-9*Math.sin(ang)-5*Math.cos(ang)}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
     if(S.at === "to") l += `<circle cx="${ax}" cy="${ay}" r="13" fill="#0e1216" stroke="${c}" stroke-width="2"/>${nglyph(sel.kind, ax, ay, 20)}`;
   }
-  marks.innerHTML = m; links.innerHTML = l; placeCards(sel); panel(sel, list);
+  marks.innerHTML = m + top; links.innerHTML = l; placeCards(sel); panel(sel, list);
 }
 
 // photo cards beside the throw spot and the landing spot, on the side away from the flight line
@@ -1171,7 +1171,7 @@ function lnGroups(){
 }
 function groupLayer(groups){
   const w = LW(), rt = mk(), list = objs();
-  return groups.map(g => {
+  return [...groups].sort((a, b) => (a.key === BD.fan) - (b.key === BD.fan)).map(g => {   // the fanned group last, on top
     const {x, y, m} = g;
     if(BD.fan !== g.key){ const k0 = list[m[0]].k;
       return `<g data-tg="${g.key}"><circle cx="${x}" cy="${y}" r="${r1(rt*1.6)}" fill="transparent"/><circle cx="${x}" cy="${y}" r="${r1(rt*1.1)}" fill="#0e1216" stroke="#e7ecef" stroke-width="${r1(w*.5)}"/>${nglyph(k0, x, y, rt*1.55)}${count(m.length, x + rt*.95, y - rt*.95)}</g>`; }
