@@ -1536,7 +1536,8 @@ const keyOf = o => o.t === "tok" ? "t" + o.n : o.id ? o.t + o.id : null;
 /* A tactic as a round, after StratPad (cs2analysis.com/stratpad, tried 2026-11-09): between two steps every player walks
    the nav mesh at rifle speed (215 u/s, geo.js); a step's clock is the owner's, or the step before minus the longest
    walk; the grenades of a step are thrown at its clock, fly their nades.ai air time and last their real time: smoke 18 s
-   (bo3.gg 2026-02-23, swap.gg 2026-07-15), fire 7 s (inferno_flame_lifetime 7 in the 1.41.9.6 convar dump). */
+   (bo3.gg 2026-02-23, swap.gg 2026-07-15), fire 7 s (inferno_flame_lifetime 7 in the 1.41.9.6 convar dump).
+   The walks out of a step start once its grenades have landed (wait), so a take goes in behind its utility. */
 const LIFE = {smoke:18, molotov:7, flash:.6, he:.6};
 const secOf = t => { const m = String(t || "").match(/^(\d+):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
 const clockStr = s => mmss(Math.max(0, Math.round(s)));
@@ -1555,10 +1556,12 @@ function moves(k){
   const prev = new Map(BD.steps[k-1].o.filter(keyOf).map(o => [keyOf(o), o]));
   return BD.steps[k].o.filter(turnable).map(o => { const f = prev.get(keyOf(o)); if(!f || f.x === o.x && f.y === o.y) return null; return {o, f, ...walk([f.x, f.y], [o.x, o.y], "w" + keyOf(o))}; }).filter(Boolean);
 }
+// the seconds from a step's clock until its last thrown grenade lands
+const wait = k => Math.max(0, ...BD.steps[k].o.filter(o => o.t === "ln").map(airOf));
 function clock(k){
   const own = secOf(BD.steps[k].time); if(own !== null) return own;
   if(k === 0) return 115;
-  return clock(k-1) - Math.max(1, ...moves(k).map(m => m.sec));
+  return clock(k-1) - wait(k-1) - Math.max(1, ...moves(k).map(m => m.sec));
 }
 // smokes and fires thrown in earlier steps that still burn at step k's clock
 function carried(k){
@@ -1570,7 +1573,7 @@ function carried(k){
 // the walks of this step as dashed lines in the player's colour, with the time; red with the shortfall when he can't make it
 function walkLayer(){
   const k = BD.cur; if(k === 0) return "";
-  const w = LW(), avail = clock(k-1) - clock(k);
+  const w = LW(), avail = clock(k-1) - wait(k-1) - clock(k);
   return moves(k).map(m => { const c = m.o.t === "tok" ? m.o.c : "#ff5148", d = smooth(m.pts), q = along(m.pts, .5), mid = [q.x, q.y], late = m.sec - avail > .05;
     return `<g pointer-events="none"><path d="${d}" fill="none" stroke="#000a" stroke-width="${w*1.2}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${w*.55}" stroke-dasharray="${w*1.4} ${w}" stroke-linecap="round" stroke-linejoin="round"/>` +
       `<text x="${mid[0]}" y="${mid[1]}" dy=".35em" text-anchor="middle" font-size="${r1(w*3)}" font-weight="700" font-family="Golos Text,system-ui,sans-serif" fill="${late ? "#ff5148" : "#e7ecef"}" stroke="#0b0e10" stroke-width="${r1(w)}" paint-order="stroke">${late ? "+" + secStr(m.sec - avail) : secStr(m.sec)}</text></g>`; }).join("");
@@ -1587,7 +1590,7 @@ function along(pts, f){
 const turnTo = (a, b, k) => a === undefined || a === null ? b : b === undefined || b === null ? a : a + ((b - a + 540) % 360 - 180)*k;
 // the round at clock T: players on their walks from step k, grenades in the air, smokes and fires for their life
 function roundAt(T, k, C, M, G){
-  const out = [], st = BD.steps[k].o, last = k === BD.steps.length-1, tau = C[k] - T, w = LW();
+  const out = [], st = BD.steps[k].o, last = k === BD.steps.length-1, tau = Math.max(0, C[k] - T - wait(k)), w = LW();
   const mv = new Map((last ? [] : M[k+1]).map(m => [keyOf(m.o), m])), nx = last ? new Map() : new Map(BD.steps[k+1].o.filter(keyOf).map(o => [keyOf(o), o]));
   st.forEach(o => { if(!KEEP.includes(o.t) && o.t !== "ln" && o.t !== "nade" && o.t !== "run" && o.t !== "eye") out.push(obj(o, -1)); });
   G.forEach(g => { if(T > g.at) return; const o = g.o, since = g.at - T;
@@ -1598,7 +1601,8 @@ function roundAt(T, k, C, M, G){
     out.push(`<g opacity="${r1(Math.min(1, (life - after)/Math.min(1.5, life)))}">${blast(o.k, x, y, o.id)}</g>`); });
   const people = [];
   st.forEach(o => { if(!KEEP.includes(o.t)) return; const m = mv.get(keyOf(o)), n = nx.get(keyOf(o)), p = {...o};
-    if(m){ const q = along(m.pts, m.sec ? tau/m.sec : 1); p.x = q.x; p.y = q.y; p.a = tau < m.sec ? q.a : turnTo(q.a, m.o.a, Math.min(1, (tau - m.sec)/.4)); }
+    if(m && C[k] - T <= wait(k)){}   // still throwing: he stays as he stands in this step
+    else if(m){ const q = along(m.pts, m.sec ? tau/m.sec : 1); p.x = q.x; p.y = q.y; p.a = tau < m.sec ? q.a : turnTo(q.a, m.o.a, Math.min(1, (tau - m.sec)/.4)); }
     else if(n && turnable(o)) p.a = turnTo(o.a, n.a, Math.min(1, tau/.4));
     (turnable(o) ? people : out).push(obj(p, -1)); });
   return out.join("") + people.join("");
